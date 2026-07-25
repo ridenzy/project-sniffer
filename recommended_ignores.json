@@ -1,0 +1,32 @@
+{
+    "IGNORE_FOLDERS": [
+        ".git",
+        "node_modules",
+        "__pycache__",
+        "dist",
+        "build",
+        "vendor",
+        ".next",
+        "virtual-env",
+        "venv",
+        ".venv",
+        "*.egg-info",
+        ".turbo"
+    ],
+    "IGNORE_FILES": [
+        ".keep",
+        ".gitkeep",
+        "composer.lock",
+        ".DS_Store",
+        ".env",
+        ".env.local",
+        ".env.production",
+        ".env.development",
+        "package-lock.json",
+        "yarn.lock",
+        "pnpm-lock.yaml",
+        ".bak.json",
+        ".bak"
+
+    ]
+}

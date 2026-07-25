@@ -1,0 +1,13 @@
+# Virtual environment
+.env
+virtual-env/
+__pycache__/
+
+# Working documentations
+docs/
+
+# where reports are saved (created automatically)
+reports/
+
+# where files that should be ignored based on project-to-project exposure difference (automatically generated)
+personal_ignores.json
