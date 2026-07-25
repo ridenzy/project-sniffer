@@ -4,7 +4,7 @@ virtual-env/
 __pycache__/
 
 # Working documentations
-docs/
+docs/private/
 
 # where reports are saved (created automatically)
 reports/
