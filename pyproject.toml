@@ -41,3 +41,8 @@ sniff = "project_sniffer.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+project_sniffer = [
+    "resources/*.json",
+]

@@ -8,33 +8,32 @@ target project.
 
 ## Current implementation
 
-The current implementation is intentionally small:
+Project Sniffer now has an installable package entry point:
 
 ```text
-main.py
-    |
-    +-- scanner.py
-    |
-    +-- architecture_builder.py
-    |
-    +-- report_builder.py
-    |
-    +-- utils.py
+sniff
+ |
+ +-- project_sniffer.cli
+       |
+       +-- project_sniffer.application
+             |
+             +-- project_sniffer.config
+             +-- project_sniffer.scanner
+             +-- project_sniffer.architecture_builder
+             +-- project_sniffer.report_builder
 ```
 
-Configuration currently comes from:
+The first packaged analyzers now support `--architecture` and `--report`.
 
-```text
-recommended_ignores.json
-personal_ignores.json
-```
+The package also contains its recommended ignore configuration as a packaged
+resource.
 
-`main.py` currently resolves the configuration before it resolves the target
-project and then passes the merged ignore dictionary into the scanner,
-architecture builder, and report builder.
+The original root-level runtime remains temporarily available as a regression
+reference while the migration continues.
 
-The scanner and architecture builder currently walk the target project
-independently.
+The scanner and architecture builder still walk the target project
+independently; consolidating them into a shared scan manifest remains a later
+migration step.
 
 ## Existing behavior to preserve
 
@@ -54,13 +53,12 @@ The package refactor must preserve:
 
 The current code still has several deliberate migration targets:
 
-1. Positional `sys.argv` parsing.
-2. Incorrect handling of relative project paths.
-3. Multiple project-directory walks.
-4. Exact-name ignore matching rather than real glob matching.
-5. Working-directory-dependent configuration loading.
-6. Legacy DOCX dependencies still present in `requirements.txt`.
-7. No non-overridable secret-bearing source-report exclusions yet.
+1. Multiple project-directory walks.
+2. Exact-name ignore matching rather than real glob matching.
+3. Legacy personal-ignore lookup is still working-directory dependent.
+4. Root-level and packaged scanner/report modules temporarily coexist.
+5. Legacy DOCX dependencies still remain in `requirements.txt`.
+6. No non-overridable secret-bearing source-report exclusions yet.
 
 ## Target 1.0 analyzer surface
 

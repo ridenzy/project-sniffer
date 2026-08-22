@@ -22,22 +22,25 @@ Contributions to the core should preserve these principles:
 
 Project Sniffer now has an installable development package.
 
-The installed CLI foundation supports:
+The current packaged CLI supports:
 
 ```bash
-sniff --help
-sniff --version
+sniff --project /path/to/project --architecture
+sniff --project /path/to/project --report
+sniff --project /path/to/project --architecture --report
 ```
 
-The proven project-scanning path still runs through:
+Reports are grouped by scanned project:
 
-```bash
-python3 main.py /path/to/project
+```text
+reports/<project-name>/<files>
 ```
 
-until the architecture and report analyzers are migrated behind `sniff`.
+A custom `--output PATH` changes the base output directory but still keeps the
+project-specific subdirectory.
 
-The legacy runtime still consists primarily of:
+The original root runtime remains temporarily available as a compatibility and
+regression reference:
 
 ```text
 main.py
@@ -48,8 +51,8 @@ utils.py
 recommended_ignores.json
 ```
 
-Do not remove working behaviour from those modules until the equivalent
-installed-CLI path has passed regression and end-to-end acceptance.
+Do not remove those legacy modules until the packaged scanner/configuration
+migration has completed and equivalent behavior remains covered by tests.
 
 ## Private and generated material
 

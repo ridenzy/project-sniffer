@@ -13,6 +13,10 @@ The project is still in pre-1.0 development.
 - Initial contributor guidance.
 - Initial installable Python package and `sniff` CLI foundation.
 - Initial CLI help and version tests.
+- Migrated architecture and Markdown source-report execution behind the installed `sniff` command.
+- Correct relative project-path resolution for the packaged CLI.
+- Project-grouped report directories for default and custom output bases.
+- Packaged recommended-ignore resources and a non-creating legacy personal-ignore loader.
 - Maintained public architecture documentation.
 - Maintained configuration and ignore-rule documentation.
 - Expanded repository-local Git ignore protection.

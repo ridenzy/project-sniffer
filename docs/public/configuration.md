@@ -2,27 +2,29 @@
 
 ## Current configuration model
 
-The current runtime reads two JSON files:
+The installed CLI now loads built-in recommended ignores from the packaged
+resource:
 
 ```text
-recommended_ignores.json
+src/project_sniffer/resources/recommended_ignores.json
+```
+
+During the current migration window it may also read an existing legacy:
+
+```text
 personal_ignores.json
 ```
 
-Both currently use this shape:
+from the invocation working directory.
 
-```json
-{
-    "IGNORE_FOLDERS": [],
-    "IGNORE_FILES": []
-}
-```
+The packaged loader validates that `IGNORE_FOLDERS` and `IGNORE_FILES` are lists
+of strings and never creates or modifies the personal file.
 
-`main.py` merges the two lists before scanning.
+The original root-level `main.py` still uses the older root JSON files and
+retains its legacy auto-create behavior.
 
-This legacy structure must remain unchanged until the configuration loader is
-migrated. Changing `personal_ignores.json` to the future schema before changing
-its consumer would silently disable the current personal ignore entries.
+Removing the remaining working-directory dependency and selecting personal
+rules by resolved target project is the next configuration migration stage.
 
 ## Planned machine-local per-project registry
 

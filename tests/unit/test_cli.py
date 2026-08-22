@@ -5,13 +5,16 @@ import unittest
 from contextlib import redirect_stdout
 
 from project_sniffer import __version__
-from project_sniffer.cli import build_parser, main
+from project_sniffer.cli import (
+    build_parser,
+    main,
+)
 
 
 class ProjectSnifferCliTests(
     unittest.TestCase
 ):
-    def test_help_documents_examples_and_safety_boundary(
+    def test_help_documents_current_analyzers_and_safety_boundary(
         self,
     ) -> None:
         help_text = (
@@ -19,17 +22,13 @@ class ProjectSnifferCliTests(
         )
 
         required_fragments = (
-            "Examples available in this checkpoint:",
-            "sniff --help",
-            "sniff -h",
-            "sniff --version",
+            "--project",
+            "--architecture",
+            "--report",
+            "--output",
             (
                 "sniff --project ./frontend "
                 "--architecture"
-            ),
-            (
-                "not enabled by this "
-                "checkpoint yet"
             ),
             "read-only",
         )

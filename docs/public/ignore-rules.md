@@ -68,8 +68,21 @@ these files, but raw values must not be persisted in ordinary reports.
 
 ## Generated report directories
 
-When the selected output directory is inside the scanned project, Project
-Sniffer must automatically exclude that output tree from the scan.
+The packaged CLI groups generated output by project:
 
-This prevents generated reports from recursively appearing inside newer
-reports.
+```text
+reports/<project-name>/<files>
+```
+
+When `--output PATH` is used, `PATH` becomes the base output directory and the
+project-specific subdirectory is retained:
+
+```text
+PATH/<project-name>/<files>
+```
+
+The current Phase 1 bridge also prevents an unignored custom output directory
+inside the scanned project from being used.
+
+The later shared scanner will provide path-aware automatic output-tree
+exclusion rather than relying only on the current exact-name ignore model.

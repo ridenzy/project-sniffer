@@ -1,46 +1,78 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from collections.abc import Sequence
+from pathlib import Path
 
 from project_sniffer import __version__
+from project_sniffer.application import (
+    run_analysis,
+)
 
 
 _DESCRIPTION = """\
 Project Sniffer
 Local-first, read-only repository intelligence.
 
-This Phase 1 CLI foundation exposes command documentation and package version
-metadata while the proven architecture/report runtime is migrated behind the
-installed `sniff` command.
+Generate deterministic repository evidence without executing
+target-project code.
 """
 
 _EPILOG = """\
-Examples available in this checkpoint:
-  sniff --help
-  sniff -h
-  sniff --version
+Implemented analyzers in this Phase 1 checkpoint:
+  --architecture    Generate the current project-tree architecture report.
+  --report          Generate the current readable Markdown source report.
 
-Phase 1 commands being wired next:
+Examples:
   sniff --project ./frontend --architecture
   sniff --project ./frontend --report
   sniff --project ./frontend --architecture --report
   sniff --project ./frontend --architecture --output ./analysis
 
-The analyzer examples above are intentionally documented as the next migration
-slice; they are not enabled by this checkpoint yet.
+Still planned for later phases:
+  --trace
+  --secret
+  --database
+  --all
+  --config
+  --strict
+  --verbose
+  --quiet
 
 Safety model:
-  Project Sniffer is designed to inspect target projects read-only. The core
-  does not execute target-project code, install target dependencies, connect to
+  Project Sniffer inspects target projects read-only. The core does not
+  execute target-project code, install target dependencies, connect to
   target databases, or make ordinary static-analysis network requests.
 """
+
+
+class ProjectSnifferArgumentParser(
+    argparse.ArgumentParser
+):
+    """Argument parser using Project Sniffer's invalid-input code."""
+
+    def error(
+        self,
+        message: str,
+    ) -> None:
+        self.print_usage(
+            sys.stderr
+        )
+
+        self.exit(
+            1,
+            (
+                f"{self.prog}: error: "
+                f"{message}\n"
+            ),
+        )
 
 
 def build_parser() -> argparse.ArgumentParser:
     """Build and return the Project Sniffer command-line parser."""
 
-    parser = argparse.ArgumentParser(
+    parser = ProjectSnifferArgumentParser(
         prog="sniff",
         description=_DESCRIPTION,
         epilog=_EPILOG,
@@ -59,20 +91,94 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    parser.add_argument(
+        "--project",
+        metavar="PATH",
+        help=(
+            "Full or relative path to the "
+            "project to inspect."
+        ),
+    )
+
+    analyzers = (
+        parser.add_argument_group(
+            "implemented analyzers"
+        )
+    )
+
+    analyzers.add_argument(
+        "--architecture",
+        action="store_true",
+        help=(
+            "Generate the current architecture "
+            "tree report."
+        ),
+    )
+
+    analyzers.add_argument(
+        "--report",
+        action="store_true",
+        help=(
+            "Generate the current readable "
+            "Markdown source report."
+        ),
+    )
+
+    parser.add_argument(
+        "--output",
+        metavar="PATH",
+        help=(
+            "Override the base output directory. "
+            "A project-named subdirectory is "
+            "created inside it."
+        ),
+    )
+
     return parser
 
 
 def main(
     argv: Sequence[str] | None = None,
 ) -> int:
-    """Run the current Project Sniffer CLI foundation."""
+    """Run the installed Project Sniffer CLI."""
 
     parser = build_parser()
 
-    parser.parse_args(
+    args = parser.parse_args(
         argv
     )
 
-    parser.print_help()
+    requested_analyzer = (
+        args.architecture
+        or args.report
+    )
 
-    return 0
+    if (
+        not requested_analyzer
+        and args.project is None
+        and args.output is None
+    ):
+        parser.print_help()
+        return 0
+
+    if args.project is None:
+        parser.error(
+            "--project is required when "
+            "running an analyzer"
+        )
+
+    if not requested_analyzer:
+        parser.error(
+            "select at least one implemented "
+            "analyzer: --architecture or --report"
+        )
+
+    return run_analysis(
+        project_value=args.project,
+        architecture_requested=(
+            args.architecture
+        ),
+        report_requested=args.report,
+        output_value=args.output,
+        working_directory=Path.cwd(),
+    )

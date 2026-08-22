@@ -9,30 +9,35 @@ developers, reviewers, and supervised AI-assisted engineering workflows.
 
 ## Current development state
 
-Project Sniffer now has an installable development package and CLI foundation.
+Project Sniffer now has an installable development package with the first
+working analyzers.
 
-The installed command currently supports:
-
-```bash
-sniff --help
-sniff --version
-```
-
-The architecture and report analyzers are the next Phase 1 migration slice and
-are not wired to `sniff` yet.
-
-Until that migration is completed, the proven scanning entry point remains:
+Implemented commands include:
 
 ```bash
-python3 main.py /full/path/to/project
+sniff --project /path/to/project --architecture
+sniff --project /path/to/project --report
+sniff --project /path/to/project --architecture --report
 ```
 
-That legacy entry point currently generates:
+Default output is grouped by scanned project:
 
 ```text
-reports/<project-name>-architecture.md
-reports/<project-name>-project-report.md
+reports/<project-name>/
+├── <project-name>-architecture.md
+└── <project-name>-project-report.md
 ```
+
+`--output PATH` overrides the base output directory while preserving the
+project-specific subdirectory:
+
+```text
+PATH/<project-name>/<files>
+```
+
+The original root-level `main.py` runtime remains temporarily available as a
+migration and regression reference until the packaged runtime fully replaces
+it.
 
 ## Current capabilities
 
