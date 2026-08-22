@@ -20,6 +20,10 @@ The project is still in pre-1.0 development.
 - Deterministic machine-local personal-ignore registry resolution.
 - Schema-version-1 per-project personal ignore profiles with root-name and root-path matching.
 - Backward-compatible support for the legacy global personal-ignore shape during the 0.x migration.
+- Shared single-walk scan manifest for the packaged architecture and source-report analyzers.
+- Exact and shell-style basename glob matching for current ignore folder and file rules.
+- Automatic exclusion of the active project-specific report directory from repeat scans.
+- Packaged exclusion for legacy private `personal_ignores.json`.
 - Maintained public architecture documentation.
 - Maintained configuration and ignore-rule documentation.
 - Expanded repository-local Git ignore protection.

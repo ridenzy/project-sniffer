@@ -31,9 +31,9 @@ resource.
 The original root-level runtime remains temporarily available as a regression
 reference while the migration continues.
 
-The scanner and architecture builder still walk the target project
-independently; consolidating them into a shared scan manifest remains a later
-migration step.
+The packaged architecture and source-report analyzers now consume one shared
+scan manifest produced by a single deterministic project walk. The legacy
+root-level runtime remains separate during the migration period.
 
 ## Existing behavior to preserve
 
@@ -53,12 +53,12 @@ The package refactor must preserve:
 
 The current code still has several deliberate migration targets:
 
-1. Multiple project-directory walks.
-2. Exact-name ignore matching rather than real glob matching.
-3. Root-level and packaged scanner/report modules temporarily coexist.
-4. The legacy root runtime still has its own repository-local configuration.
-5. Legacy DOCX dependencies still remain in `requirements.txt`.
-6. No non-overridable secret-bearing source-report exclusions yet.
+1. Ignore matching is currently basename-oriented; project-relative and
+   `.gitignore` semantics are not implemented yet.
+2. Root-level and packaged scanner/report modules temporarily coexist.
+3. The legacy root runtime still has its own repository-local configuration.
+4. Legacy DOCX dependencies still remain in `requirements.txt`.
+5. No non-overridable secret-bearing source-report exclusions yet.
 
 ## Target 1.0 analyzer surface
 

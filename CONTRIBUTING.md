@@ -121,6 +121,10 @@ Changes that affect scanning or report generation should also be exercised
 against a synthetic disposable project rather than against private production
 repositories.
 
+The packaged architecture and source-report analyzers share one scan manifest.
+New analyzer code must consume that shared evidence rather than introducing
+another independent project walk.
+
 As the package and formal test suite are introduced, this section will be
 updated with the canonical package, lint, type-check, and test commands.
 

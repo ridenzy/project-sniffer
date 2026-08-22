@@ -1,11 +1,11 @@
+from __future__ import annotations
+
 import os
 
-
+from project_sniffer.scanning import IgnoreMatcher
 
 
 OUTPUT_PATH = "reports/project-report.md"
-
-
 
 
 def is_valid_xml_char(char: str) -> bool:
@@ -44,29 +44,38 @@ def clean_text(text: str) -> str:
 def is_binary(file_path):
     """
     Detect whether a file is binary.
+
+    An unreadable file is not classified as binary here. The later text-read
+    stage owns unreadable-file handling so that it can record the file in the
+    correct report-summary category.
     """
 
     try:
-        with open(file_path, "rb") as f:
-            chunk = f.read(2048)
+        with open(
+            file_path,
+            "rb",
+        ) as file_handle:
+            chunk = file_handle.read(
+                2048
+            )
 
         return b"\x00" in chunk
 
-    except Exception:
-        return True
+    except OSError:
+        return False
 
 
-def should_skip_file(path, project_path, ignore):
+def should_skip_file(
+    path,
+    project_path,
+    ignore,
+):
     """
-    Decide whether a file should be skipped based on ignored folders/files.
+    Decide whether a file should be skipped using the shared ignore matcher.
     """
 
-    ignore_folders = set(
-        ignore.get("IGNORE_FOLDERS", [])
-    )
-
-    ignore_files = set(
-        ignore.get("IGNORE_FILES", [])
+    matcher = IgnoreMatcher.from_config(
+        ignore
     )
 
     relative_path = os.path.relpath(
@@ -74,14 +83,23 @@ def should_skip_file(path, project_path, ignore):
         start=project_path,
     )
 
-    path_parts = relative_path.split(os.sep)
-    filename = os.path.basename(path)
+    path_parts = relative_path.split(
+        os.sep
+    )
 
-    if filename in ignore_files:
+    filename = os.path.basename(
+        path
+    )
+
+    if matcher.matches_file(
+        filename
+    ):
         return True
 
-    for part in path_parts:
-        if part in ignore_folders:
+    for part in path_parts[:-1]:
+        if matcher.matches_folder(
+            part
+        ):
             return True
 
     return False
@@ -107,7 +125,6 @@ def get_safe_markdown_fence(content):
                 longest_backtick_run,
                 current_backtick_run,
             )
-
         else:
             current_backtick_run = 0
 
@@ -119,7 +136,11 @@ def get_safe_markdown_fence(content):
     return "`" * fence_length
 
 
-def add_text_safely(report_sections, relative_path, content):
+def add_text_safely(
+    report_sections,
+    relative_path,
+    content,
+):
     """
     Add file content to the Markdown report safely.
 
@@ -161,7 +182,9 @@ def add_text_safely(report_sections, relative_path, content):
             index:index + max_chunk_size
         ]
 
-        report_sections.append(chunk)
+        report_sections.append(
+            chunk
+        )
 
     report_sections.append(
         f"\n{markdown_fence}\n\n"
@@ -182,6 +205,7 @@ def build_report(
     Generate a Markdown document containing readable project source files.
 
     This version is crash-resistant:
+
     - skips ignored files
     - skips binary files
     - cleans invalid control characters
@@ -233,7 +257,9 @@ def build_report(
             skipped_ignored += 1
             continue
 
-        if is_binary(path):
+        if is_binary(
+            path
+        ):
             skipped_binary += 1
 
             print(
@@ -248,10 +274,12 @@ def build_report(
                 "r",
                 encoding="utf-8",
                 errors="ignore",
-            ) as f:
-                content = f.read()
+            ) as file_handle:
+                content = file_handle.read()
 
-            content = clean_text(content)
+            content = clean_text(
+                content
+            )
 
         except Exception as error:
             skipped_unreadable += 1
@@ -306,27 +334,35 @@ def build_report(
             report_sections
         )
 
-    print("\nReport summary:")
+    print(
+        "\nReport summary:"
+    )
+
     print(
         f"  Added text files: "
         f"{added_files}"
     )
+
     print(
         f"  Skipped ignored files: "
         f"{skipped_ignored}"
     )
+
     print(
         f"  Skipped binary files: "
         f"{skipped_binary}"
     )
+
     print(
         f"  Skipped unreadable files: "
         f"{skipped_unreadable}"
     )
+
     print(
         f"  Skipped markdown-error files: "
         f"{skipped_markdown_error}"
     )
+
     print(
         f"  Report saved to: "
         f"{output_path}"

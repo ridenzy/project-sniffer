@@ -2,50 +2,76 @@
 
 ## Current behavior
 
-The present scanner converts `IGNORE_FOLDERS` and `IGNORE_FILES` into Python
-sets and performs exact-name membership checks.
+The packaged shared scanner now supports both exact basename rules and
+shell-style basename glob rules in:
 
-This means entries such as:
+```text
+IGNORE_FOLDERS
+IGNORE_FILES
+```
+
+Examples:
 
 ```text
 node_modules
 .git
 agents.json
+*.egg-info
+*.bak
 ```
 
-work when the discovered name matches exactly.
+The matcher is case-sensitive and deterministic.
 
-An entry such as:
+Folder rules are applied only to discovered directory names.
+
+File rules are applied only to discovered filenames.
+
+## Shared scan manifest
+
+The installed architecture and source-report analyzers now consume the same
+project scan manifest.
+
+The repository is walked once for their shared discovery phase.
+
+This removes the earlier architecture-specific second `os.walk`.
+
+## Generated report directories
+
+Project Sniffer explicitly excludes the resolved project-specific output
+directory from the shared scan.
+
+This allows a custom output base to live inside the scanned project without
+causing previously generated reports to recursively enter later reports.
+
+The project root itself cannot be selected as the report directory.
+
+## Personal configuration
+
+The legacy filename:
 
 ```text
-*.egg-info
+personal_ignores.json
 ```
 
-does not currently behave as a glob pattern.
+is excluded by the packaged recommended rules.
 
-That limitation is intentional technical debt to be removed by the shared scan
-engine.
+Machine-local personal configuration belongs outside scanned repositories.
 
-## Planned ignore engine
+The repository-root copy remains temporarily relevant only to the legacy
+root-level `main.py` compatibility path.
 
-The future matcher will support:
+## Not implemented yet
 
-- exact folder names;
-- exact filenames;
-- project-relative paths;
-- glob patterns;
-- `.gitignore`-style matching;
-- controlled negation where safety policy permits it.
+The current basename matcher does not yet implement:
 
-## Configuration sources
+- project-relative ignore paths;
+- `.gitignore` parsing;
+- full `.gitignore` matching semantics;
+- negated ignore patterns;
+- target-project `.project-sniffer.toml` pattern rules.
 
-Ignore rules may eventually come from:
-
-1. built-in defaults;
-2. user-wide configuration;
-3. target-project `.project-sniffer.toml`;
-4. the machine-local per-project personal registry;
-5. command-line overrides.
+Those features belong to the next shared-scanner configuration slice rather
+than being approximated incorrectly with basename matching.
 
 ## Non-overridable safety exclusions
 
@@ -63,26 +89,5 @@ Examples include:
 - cookie stores;
 - other recognized secret-bearing runtime files.
 
-The secret analyzer may later inspect narrowly controlled metadata from some of
-these files, but raw values must not be persisted in ordinary reports.
-
-## Generated report directories
-
-The packaged CLI groups generated output by project:
-
-```text
-reports/<project-name>/<files>
-```
-
-When `--output PATH` is used, `PATH` becomes the base output directory and the
-project-specific subdirectory is retained:
-
-```text
-PATH/<project-name>/<files>
-```
-
-The current Phase 1 bridge also prevents an unignored custom output directory
-inside the scanned project from being used.
-
-The later shared scanner will provide path-aware automatic output-tree
-exclusion rather than relying only on the current exact-name ignore model.
+That stronger safety layer remains a later prerequisite for the `--secret`
+analyzer.

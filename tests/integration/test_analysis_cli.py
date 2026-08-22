@@ -433,6 +433,95 @@ class ProjectSnifferAnalysisCliTests(
             architecture_text,
         )
 
+    def test_in_project_custom_output_is_excluded_on_repeat_scan(
+        self,
+    ) -> None:
+        output_base = (
+            self.project
+            / "analysis"
+        )
+
+        first_status = main(
+            [
+                "--project",
+                str(
+                    self.project
+                ),
+                "--architecture",
+                "--report",
+                "--output",
+                str(
+                    output_base
+                ),
+            ]
+        )
+
+        self.assertEqual(
+            first_status,
+            0,
+        )
+
+        second_status = main(
+            [
+                "--project",
+                str(
+                    self.project
+                ),
+                "--architecture",
+                "--report",
+                "--output",
+                str(
+                    output_base
+                ),
+            ]
+        )
+
+        self.assertEqual(
+            second_status,
+            0,
+        )
+
+        report_directory = (
+            output_base
+            / "fixture-project"
+        )
+
+        architecture_text = (
+            report_directory
+            / (
+                "fixture-project"
+                "-architecture.md"
+            )
+        ).read_text(
+            encoding="utf-8"
+        )
+
+        report_text = (
+            report_directory
+            / (
+                "fixture-project"
+                "-project-report.md"
+            )
+        ).read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn(
+            (
+                "analysis/fixture-project/"
+                "fixture-project-architecture.md"
+            ),
+            architecture_text,
+        )
+
+        self.assertNotIn(
+            (
+                "# `analysis/fixture-project/"
+                "fixture-project-architecture.md`"
+            ),
+            report_text,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

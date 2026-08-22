@@ -1,42 +1,143 @@
-import os
+from __future__ import annotations
+
+from collections import defaultdict
+from pathlib import PurePosixPath
+
+from project_sniffer.scanning import (
+    ScanManifest,
+)
 
 
-def build_architecture(root_path, ignore=None):
+def _parent_key(
+    relative_path: str,
+) -> str:
+    parent = PurePosixPath(
+        relative_path
+    ).parent
+
+    if str(
+        parent
+    ) == ".":
+        return ""
+
+    return parent.as_posix()
+
+
+def build_architecture(
+    manifest: ScanManifest,
+) -> str:
     """
-    Build a readable folder/file tree for a project.
+    Build the project tree from the shared scan manifest.
 
-    Uses the same ignore config as scanner.py so generated architecture.md
-    does not include virtual environments, Git data, cache folders, etc.
+    This function performs no filesystem walk of its own.
     """
 
-    ignore = ignore or {}
+    directories_by_parent: dict[
+        str,
+        list[str],
+    ] = defaultdict(
+        list
+    )
 
-    ignore_folders = set(ignore.get("IGNORE_FOLDERS", []))
-    ignore_files = set(ignore.get("IGNORE_FILES", []))
+    files_by_parent: dict[
+        str,
+        list[str],
+    ] = defaultdict(
+        list
+    )
 
-    root_path = os.path.abspath(root_path)
+    for relative_directory in manifest.directories:
+        path = PurePosixPath(
+            relative_directory
+        )
 
-    lines = []
+        directories_by_parent[
+            _parent_key(
+                relative_directory
+            )
+        ].append(
+            path.name
+        )
 
-    for root, dirs, files in os.walk(root_path):
-        dirs[:] = sorted([d for d in dirs if d not in ignore_folders])
-        files = sorted([f for f in files if f not in ignore_files])
+    for scanned_file in manifest.files:
+        path = PurePosixPath(
+            scanned_file.relative_path
+        )
 
-        relative_root = os.path.relpath(root, root_path)
+        files_by_parent[
+            _parent_key(
+                scanned_file.relative_path
+            )
+        ].append(
+            path.name
+        )
 
-        if relative_root == ".":
-            level = 0
-            folder_name = os.path.basename(root_path)
-        else:
-            level = relative_root.count(os.sep) + 1
-            folder_name = os.path.basename(root)
+    lines: list[str] = []
 
-        indent = "│   " * level
-        lines.append(f"{indent}{folder_name}/")
+    project_name = (
+        manifest.project_path.name
+        or "root"
+    )
 
-        subindent = "│   " * (level + 1)
+    def render_directory(
+        relative_directory: str,
+        display_name: str,
+        level: int,
+    ) -> None:
+        indent = (
+            "│   "
+            * level
+        )
 
-        for file in files:
-            lines.append(f"{subindent}{file}")
+        lines.append(
+            f"{indent}{display_name}/"
+        )
 
-    return "\n".join(lines)
+        subindent = (
+            "│   "
+            * (
+                level
+                + 1
+            )
+        )
+
+        for filename in sorted(
+            files_by_parent.get(
+                relative_directory,
+                [],
+            )
+        ):
+            lines.append(
+                f"{subindent}{filename}"
+            )
+
+        for directory_name in sorted(
+            directories_by_parent.get(
+                relative_directory,
+                [],
+            )
+        ):
+            child_relative = (
+                directory_name
+                if not relative_directory
+                else (
+                    f"{relative_directory}/"
+                    f"{directory_name}"
+                )
+            )
+
+            render_directory(
+                child_relative,
+                directory_name,
+                level + 1,
+            )
+
+    render_directory(
+        "",
+        project_name,
+        0,
+    )
+
+    return "\n".join(
+        lines
+    )

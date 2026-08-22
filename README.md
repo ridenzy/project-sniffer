@@ -43,8 +43,9 @@ it.
 
 The existing implementation can:
 
-- recursively scan a project;
-- skip configured folders and filenames;
+- recursively scan a project through one shared discovery manifest;
+- skip exact-name and basename-glob folder/file rules;
+- exclude the active Project Sniffer output directory from repeat scans;
 - generate a project tree;
 - generate a readable Markdown source report;
 - skip obvious binary files;

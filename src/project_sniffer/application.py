@@ -86,45 +86,6 @@ def resolve_output_directory(
     ).resolve()
 
 
-def output_location_is_scan_safe(
-    *,
-    project_path: Path,
-    output_directory: Path,
-    ignore: dict[str, list[str]],
-) -> bool:
-    """
-    Check whether an output directory inside the scanned project is
-    already covered by the current exact-name ignore rules.
-
-    Path-aware output exclusion belongs to the shared scanner phase.
-    Until then, an unignored in-project custom output path is rejected
-    rather than allowing a later scan to ingest generated reports.
-    """
-
-    try:
-        relative_output = (
-            output_directory.relative_to(
-                project_path
-            )
-        )
-    except ValueError:
-        return True
-
-    if not relative_output.parts:
-        return False
-
-    top_level_directory = (
-        relative_output.parts[0]
-    )
-
-    return (
-        top_level_directory
-        in ignore.get(
-            "IGNORE_FOLDERS",
-            [],
-        )
-    )
-
 
 def run_analysis(
     *,
@@ -191,18 +152,10 @@ def run_analysis(
         )
         return INVALID_INPUT
 
-    if not output_location_is_scan_safe(
-        project_path=project_path,
-        output_directory=output_directory,
-        ignore=ignore,
-    ):
+    if output_directory == project_path:
         print(
-            "Error: output directory is inside the "
-            "scanned project but is not covered by "
-            "the current ignore rules. Use an output "
-            "directory outside the project or beneath "
-            "an ignored top-level directory such as "
-            "`reports`.",
+            "Error: output directory cannot be the "
+            "project root itself.",
             file=sys.stderr,
         )
         return INVALID_INPUT
@@ -218,19 +171,20 @@ def run_analysis(
         "\nScanning project..."
     )
 
-    files = scan_project(
-        str(
-            project_path
-        ),
+    manifest = scan_project(
+        project_path,
         ignore,
+        excluded_directories=(
+            output_directory,
+        ),
     )
 
     print(
         "Scanned files after ignores: "
-        f"{len(files)}"
+        f"{len(manifest.files)}"
     )
 
-    if not files:
+    if not manifest.files:
         print(
             "Warning: no files were found. "
             "Check the project path or ignore rules."
@@ -264,10 +218,7 @@ def run_analysis(
         )
 
         architecture = build_architecture(
-            str(
-                project_path
-            ),
-            ignore,
+            manifest
         )
 
         try:
@@ -309,7 +260,12 @@ def run_analysis(
                 project_path=str(
                     project_path
                 ),
-                file_paths=files,
+                file_paths=[
+                    str(
+                        scanned_file.absolute_path
+                    )
+                    for scanned_file in manifest.files
+                ],
                 ignore=ignore,
                 output_path=str(
                     report_output
