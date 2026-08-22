@@ -1,0 +1,43 @@
+[build-system]
+requires = [
+    "setuptools >= 77.0.3",
+]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "project-sniffer"
+version = "0.2.0.dev0"
+description = "Local repository intelligence for supervised agentic engineering."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = [
+    "LICENSE",
+]
+dependencies = []
+keywords = [
+    "repository-analysis",
+    "static-analysis",
+    "dependency-tracing",
+    "developer-tools",
+    "agentic-engineering",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Quality Assurance",
+]
+
+[project.scripts]
+sniff = "project_sniffer.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

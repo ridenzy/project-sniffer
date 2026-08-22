@@ -11,6 +11,8 @@ The project is still in pre-1.0 development.
 - MIT licensing baseline.
 - Developer Certificate of Origin 1.1 contribution policy.
 - Initial contributor guidance.
+- Initial installable Python package and `sniff` CLI foundation.
+- Initial CLI help and version tests.
 - Maintained public architecture documentation.
 - Maintained configuration and ignore-rule documentation.
 - Expanded repository-local Git ignore protection.

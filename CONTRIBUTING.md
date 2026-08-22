@@ -20,14 +20,24 @@ Contributions to the core should preserve these principles:
 
 ## Current runtime
 
-Until the package migration is complete, the current development entry point
-is:
+Project Sniffer now has an installable development package.
+
+The installed CLI foundation supports:
+
+```bash
+sniff --help
+sniff --version
+```
+
+The proven project-scanning path still runs through:
 
 ```bash
 python3 main.py /path/to/project
 ```
 
-The current flat runtime consists primarily of:
+until the architecture and report analyzers are migrated behind `sniff`.
+
+The legacy runtime still consists primarily of:
 
 ```text
 main.py
@@ -38,8 +48,8 @@ utils.py
 recommended_ignores.json
 ```
 
-Do not remove working behaviour from those modules merely because the future
-package layout has already been designed.
+Do not remove working behaviour from those modules until the equivalent
+installed-CLI path has passed regression and end-to-end acceptance.
 
 ## Private and generated material
 
@@ -94,6 +104,12 @@ python3 -m compileall \
 python3 -m json.tool \
     recommended_ignores.json \
     >/dev/null
+
+python3 -m unittest \
+    discover \
+    -s tests \
+    -p 'test_*.py' \
+    -v
 
 git diff --check
 ```
