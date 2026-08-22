@@ -1,13 +1,39 @@
-# Virtual environment
+# Local environments and secret-bearing configuration
 .env
-virtual-env/
-__pycache__/
+.env.*
+!.env.example
 
-# Working documentations
+# Python virtual environments
+virtual-env/
+virtual_env/
+venv/
+.venv/
+
+# Python caches and generated package metadata
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Coverage and build output
+.coverage
+coverage.xml
+htmlcov/
+build/
+dist/
+
+# Private working documentation
 docs/private/
 
-# where reports are saved (created automatically)
+# Project Sniffer generated reports
 reports/
 
-# where files that should be ignored based on project-to-project exposure difference (automatically generated)
+# Machine-local Project Sniffer preferences
 personal_ignores.json
+
+# Common editor and operating-system files
+.DS_Store
+.idea/
+.vscode/
