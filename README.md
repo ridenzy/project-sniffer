@@ -102,6 +102,13 @@ See:
 - `docs/public/configuration.md`
 - `docs/public/ignore-rules.md`
 
+## Contributing
+
+Project Sniffer is currently in pre-1.0 development.
+
+See `CONTRIBUTING.md` before submitting changes. Contributions use Developer
+Certificate of Origin 1.1 sign-off and should be committed with `git commit -s`.
+
 ## License
 
 Project Sniffer is licensed under the MIT License. See `LICENSE`.
