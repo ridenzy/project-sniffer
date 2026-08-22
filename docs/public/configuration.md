@@ -2,36 +2,53 @@
 
 ## Current configuration model
 
-The installed CLI now loads built-in recommended ignores from the packaged
-resource:
+The installed CLI loads recommended ignore rules from the packaged resource:
 
 ```text
 src/project_sniffer/resources/recommended_ignores.json
 ```
 
-During the current migration window it may also read an existing legacy:
+Machine-local personal ignore rules are resolved independently of the shell
+working directory.
+
+On Linux and other XDG-oriented environments, the personal registry is:
 
 ```text
-personal_ignores.json
+${XDG_CONFIG_HOME}/project-sniffer/personal_ignores.json
 ```
 
-from the invocation working directory.
+when `XDG_CONFIG_HOME` is defined.
 
-The packaged loader validates that `IGNORE_FOLDERS` and `IGNORE_FILES` are lists
-of strings and never creates or modifies the personal file.
+Otherwise the default is:
 
-The original root-level `main.py` still uses the older root JSON files and
-retains its legacy auto-create behavior.
+```text
+~/.config/project-sniffer/personal_ignores.json
+```
 
-Removing the remaining working-directory dependency and selecting personal
-rules by resolved target project is the next configuration migration stage.
+On Windows, `APPDATA` is used when available.
 
-## Planned machine-local per-project registry
+The loader reads the personal registry but never creates or modifies it.
 
-The future private `personal_ignores.json` will retain settings for more than
-one scanned project.
+## Legacy global personal-ignore format
 
-Planned schema:
+During the 0.x migration period the old format remains supported:
+
+```json
+{
+    "IGNORE_FOLDERS": [],
+    "IGNORE_FILES": []
+}
+```
+
+When this format is stored at the machine-local registry location, its rules
+continue to apply globally to scanned projects.
+
+This compatibility exists so existing machine-local rules do not stop working
+merely because configuration resolution became deterministic.
+
+## Per-project registry format
+
+The preferred machine-local format is schema version 1:
 
 ```json
 {
@@ -50,30 +67,54 @@ Planned schema:
 }
 ```
 
-This file remains:
+The file remains:
 
 ```text
 machine-local
-Git-ignored
 not distributed with Project Sniffer
+not part of a scanned project's source configuration
 ```
 
-## Project selection
+## Project profile selection
 
-The future loader will:
+Project Sniffer resolves the target project before selecting personal rules.
 
-1. resolve the requested project root;
-2. derive its root name;
-3. load the personal registry;
-4. select a matching project profile;
-5. merge the selected profile with the other configuration sources;
-6. construct final scan settings;
-7. begin scanning.
+Matching specificity is:
 
-A profile may later contain an optional root-path qualifier when multiple local
-projects share the same directory name.
+```text
+ROOT_PATH + ROOT_NAME
+ROOT_PATH
+ROOT_NAME
+profile ID matching the project root name
+```
 
-Example:
+The most specific matching profile wins.
+
+Profiles with the same matching specificity are treated as ambiguous and cause
+a configuration error rather than being selected arbitrarily.
+
+## Root-name aliases
+
+A profile ID does not have to match the target directory when `ROOT_NAME` is
+provided:
+
+```json
+{
+    "schema_version": 1,
+    "projects": {
+        "company-a-frontend": {
+            "ROOT_NAME": "frontend",
+            "IGNORE_FOLDERS": [],
+            "IGNORE_FILES": []
+        }
+    }
+}
+```
+
+## Root-path qualification
+
+When multiple local repositories share a directory name, `ROOT_PATH` can
+identify the intended repository:
 
 ```json
 {
@@ -89,13 +130,29 @@ Example:
 }
 ```
 
-Absolute local paths are acceptable inside this private Git-ignored registry,
-but they must not be copied into generated public documentation or uploadable
-reports.
+Absolute local paths are permitted inside this private machine-local registry.
+
+They must not be copied into generated public examples or uploadable reports.
+
+## Legacy root runtime
+
+The original root-level:
+
+```text
+main.py
+```
+
+still uses the repository-root legacy JSON configuration.
+
+That path remains temporarily available only as a migration/regression
+reference.
+
+The installed `sniff` command no longer selects personal configuration from its
+invocation working directory.
 
 ## Planned project-owned configuration
 
-A target repository may later provide:
+A target project may later provide:
 
 ```text
 .project-sniffer.toml
@@ -103,11 +160,12 @@ A target repository may later provide:
 
 for project-owned scanning rules.
 
-That configuration is separate from the user's private personal registry.
+That configuration is separate from machine-local personal preferences and is
+not implemented by the current Phase 1 configuration slice.
 
-## Planned precedence
+## Target precedence
 
-Highest priority first:
+The intended complete precedence remains, highest priority first:
 
 1. non-overridable Project Sniffer safety rules;
 2. command-line overrides;
@@ -117,5 +175,7 @@ Highest priority first:
 6. user-wide Project Sniffer configuration;
 7. built-in defaults.
 
-The non-overridable safety layer always wins for secret-bearing source-report
-exclusions and filesystem escape protection.
+Only the currently implemented layers participate today.
+
+Non-overridable safety rules will remain authoritative for secret-bearing
+source-report exclusions and filesystem escape protection.

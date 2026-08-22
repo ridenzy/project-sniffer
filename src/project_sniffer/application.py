@@ -182,7 +182,7 @@ def run_analysis(
 
     try:
         ignore = load_ignore_config(
-            working_directory
+            project_path=project_path
         )
     except ConfigurationError as error:
         print(

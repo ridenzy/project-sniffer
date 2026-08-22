@@ -74,22 +74,22 @@ A safe `.env.example` may be committed when it contains no real values.
 Synthetic fixtures must not contain private project source code, credentials,
 private keys, tokens, cookies, or session material.
 
-## Personal ignore migration
+## Personal ignore configuration
 
-The current private `personal_ignores.json` still uses the legacy shape:
+The installed CLI supports two machine-local `personal_ignores.json` formats
+during the 0.x migration period:
 
-```json
-{
-    "IGNORE_FOLDERS": [],
-    "IGNORE_FILES": []
-}
+```text
+legacy global ignore object
+schema-version-1 per-project registry
 ```
 
-Do not convert the file to the planned multi-project schema until the runtime
-configuration loader has been migrated to understand that schema.
+The canonical machine-local registry is resolved outside the repository.
 
-Changing the data before changing its consumer would silently alter current
-ignore behaviour.
+The repository-root private file remains only for the temporary legacy
+`main.py` compatibility path.
+
+Do not commit either machine-local or repository-root personal configuration.
 
 ## Baseline validation
 

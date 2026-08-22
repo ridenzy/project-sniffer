@@ -55,8 +55,8 @@ The current code still has several deliberate migration targets:
 
 1. Multiple project-directory walks.
 2. Exact-name ignore matching rather than real glob matching.
-3. Legacy personal-ignore lookup is still working-directory dependent.
-4. Root-level and packaged scanner/report modules temporarily coexist.
+3. Root-level and packaged scanner/report modules temporarily coexist.
+4. The legacy root runtime still has its own repository-local configuration.
 5. Legacy DOCX dependencies still remain in `requirements.txt`.
 6. No non-overridable secret-bearing source-report exclusions yet.
 

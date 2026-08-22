@@ -29,6 +29,29 @@ class ProjectSnifferAnalysisCliTests(
             self.temporary_directory.name
         )
 
+        self.original_xdg_config_home = (
+            os.environ.get(
+                "XDG_CONFIG_HOME"
+            )
+        )
+
+        self.config_home = (
+            self.workspace
+            / "config-home"
+        )
+
+        self.personal_registry_path = (
+            self.config_home
+            / "project-sniffer"
+            / "personal_ignores.json"
+        )
+
+        os.environ[
+            "XDG_CONFIG_HOME"
+        ] = str(
+            self.config_home
+        )
+
         os.chdir(
             self.workspace
         )
@@ -71,6 +94,20 @@ class ProjectSnifferAnalysisCliTests(
     def tearDown(
         self,
     ) -> None:
+        if (
+            self.original_xdg_config_home
+            is None
+        ):
+            os.environ.pop(
+                "XDG_CONFIG_HOME",
+                None,
+            )
+
+        else:
+            os.environ[
+                "XDG_CONFIG_HOME"
+            ] = self.original_xdg_config_home
+
         os.chdir(
             self.original_cwd
         )
@@ -286,12 +323,11 @@ class ProjectSnifferAnalysisCliTests(
     def test_existing_legacy_personal_ignore_is_used(
         self,
     ) -> None:
-        personal_path = (
-            self.workspace
-            / "personal_ignores.json"
+        self.personal_registry_path.parent.mkdir(
+            parents=True
         )
 
-        personal_path.write_text(
+        self.personal_registry_path.write_text(
             "{\n"
             '    "IGNORE_FOLDERS": ["src"],\n'
             '    "IGNORE_FILES": []\n'
@@ -336,6 +372,63 @@ class ProjectSnifferAnalysisCliTests(
         )
 
         self.assertNotIn(
+            "src/",
+            architecture_text,
+        )
+
+    def test_working_directory_personal_ignore_is_not_used(
+        self,
+    ) -> None:
+        cwd_personal_path = (
+            self.workspace
+            / "personal_ignores.json"
+        )
+
+        cwd_personal_path.write_text(
+            "{\n"
+            '    "IGNORE_FOLDERS": ["src"],\n'
+            '    "IGNORE_FILES": []\n'
+            "}\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        output_base_directory = (
+            self.workspace
+            / "cwd-isolation-output"
+        )
+
+        status = main(
+            [
+                "--project",
+                str(
+                    self.project
+                ),
+                "--architecture",
+                "--output",
+                str(
+                    output_base_directory
+                ),
+            ]
+        )
+
+        self.assertEqual(
+            status,
+            0,
+        )
+
+        architecture_text = (
+            output_base_directory
+            / "fixture-project"
+            / (
+                "fixture-project"
+                "-architecture.md"
+            )
+        ).read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
             "src/",
             architecture_text,
         )

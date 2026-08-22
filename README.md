@@ -105,8 +105,9 @@ Project Sniffer will distinguish between:
 - machine-local per-project preferences;
 - project-owned `.project-sniffer.toml` configuration.
 
-The current `personal_ignores.json` format remains supported until its loader is
-migrated safely.
+The installed CLI now resolves machine-local personal ignores independently of
+the invocation directory and supports both the legacy global JSON format and
+schema-version-1 per-project profiles.
 
 See:
 
