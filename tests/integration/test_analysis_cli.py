@@ -523,5 +523,119 @@ class ProjectSnifferAnalysisCliTests(
         )
 
 
+    def test_target_gitignore_filters_architecture_and_report(
+        self,
+    ) -> None:
+        (
+            self.project
+            / ".gitignore"
+        ).write_text(
+            "/generated/\n"
+            "*.tmp\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        generated = (
+            self.project
+            / "generated"
+        )
+
+        generated.mkdir()
+
+        (
+            generated
+            / "ignored.txt"
+        ).write_text(
+            "generated\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        (
+            self.project
+            / "scratch.tmp"
+        ).write_text(
+            "temporary\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        output_base = (
+            self.workspace
+            / "gitignore-output"
+        )
+
+        status = main(
+            [
+                "--project",
+                str(
+                    self.project
+                ),
+                "--architecture",
+                "--report",
+                "--output",
+                str(
+                    output_base
+                ),
+            ]
+        )
+
+        self.assertEqual(
+            status,
+            0,
+        )
+
+        report_directory = (
+            output_base
+            / "fixture-project"
+        )
+
+        architecture_text = (
+            report_directory
+            / (
+                "fixture-project"
+                "-architecture.md"
+            )
+        ).read_text(
+            encoding="utf-8"
+        )
+
+        report_text = (
+            report_directory
+            / (
+                "fixture-project"
+                "-project-report.md"
+            )
+        ).read_text(
+            encoding="utf-8"
+        )
+
+        self.assertNotIn(
+            "generated/",
+            architecture_text,
+        )
+
+        self.assertNotIn(
+            "scratch.tmp",
+            architecture_text,
+        )
+
+        self.assertNotIn(
+            "# `generated/ignored.txt`",
+            report_text,
+        )
+
+        self.assertNotIn(
+            "# `scratch.tmp`",
+            report_text,
+        )
+
+        self.assertIn(
+            "# `src/example.py`",
+            report_text,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

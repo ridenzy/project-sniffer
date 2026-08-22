@@ -91,14 +91,31 @@ def should_skip_file(
         path
     )
 
+    normalized_relative_path = (
+        relative_path.replace(
+            os.sep,
+            "/",
+        )
+    )
+
     if matcher.matches_file(
-        filename
+        filename,
+        normalized_relative_path,
     ):
         return True
 
-    for part in path_parts[:-1]:
+    for index, part in enumerate(
+        path_parts[:-1]
+    ):
+        relative_folder_path = "/".join(
+            path_parts[
+                :index + 1
+            ]
+        )
+
         if matcher.matches_folder(
-            part
+            part,
+            relative_folder_path,
         ):
             return True
 

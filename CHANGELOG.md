@@ -24,6 +24,9 @@ The project is still in pre-1.0 development.
 - Exact and shell-style basename glob matching for current ignore folder and file rules.
 - Automatic exclusion of the active project-specific report directory from repeat scans.
 - Packaged exclusion for legacy private `personal_ignores.json`.
+- Project-relative Project Sniffer ignore patterns.
+- Nested target-project `.gitignore` matching with Git-style negation and lower-level overrides.
+- Symlink-safe `.gitignore` loading and controlled scan-policy errors.
 - Maintained public architecture documentation.
 - Maintained configuration and ignore-rule documentation.
 - Expanded repository-local Git ignore protection.

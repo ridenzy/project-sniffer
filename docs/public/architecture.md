@@ -53,12 +53,13 @@ The package refactor must preserve:
 
 The current code still has several deliberate migration targets:
 
-1. Ignore matching is currently basename-oriented; project-relative and
-   `.gitignore` semantics are not implemented yet.
+1. Target-project `.project-sniffer.toml` and explicit `--config` are not
+   implemented yet.
 2. Root-level and packaged scanner/report modules temporarily coexist.
 3. The legacy root runtime still has its own repository-local configuration.
 4. Legacy DOCX dependencies still remain in `requirements.txt`.
-5. No non-overridable secret-bearing source-report exclusions yet.
+5. Safe file-reading and non-overridable secret-bearing exclusions are not
+   implemented yet.
 
 ## Target 1.0 analyzer surface
 
@@ -100,8 +101,8 @@ Requested analyzers
 Markdown and JSON reporting
 ```
 
-The architecture analyzer must eventually consume the shared scan manifest
-instead of performing a second directory walk.
+Architecture and source-report generation now consume the same shared scan
+manifest and do not introduce separate filesystem discovery walks.
 
 ## Core safety model
 

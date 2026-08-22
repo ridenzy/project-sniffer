@@ -44,7 +44,8 @@ it.
 The existing implementation can:
 
 - recursively scan a project through one shared discovery manifest;
-- skip exact-name and basename-glob folder/file rules;
+- skip exact-name, basename-glob, and project-relative folder/file rules;
+- apply nested target-project `.gitignore` rules deterministically;
 - exclude the active Project Sniffer output directory from repeat scans;
 - generate a project tree;
 - generate a readable Markdown source report;
@@ -96,7 +97,7 @@ personal information, or other sensitive material. Review reports before
 sharing them.
 
 Secret-bearing files will receive stronger non-overridable handling as the
-security analyzer and shared scanner are introduced.
+safe-reader boundary and security analyzer are introduced.
 
 ## Configuration direction
 

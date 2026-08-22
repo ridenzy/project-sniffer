@@ -218,5 +218,290 @@ class ProjectScannerTests(
         )
 
 
+    def test_project_relative_config_rule_filters_only_target_path(
+        self,
+    ) -> None:
+        first_private = (
+            self.project
+            / "docs"
+            / "private"
+        )
+
+        second_private = (
+            self.project
+            / "src"
+            / "docs"
+            / "private"
+        )
+
+        first_private.mkdir(
+            parents=True
+        )
+
+        second_private.mkdir(
+            parents=True
+        )
+
+        (
+            first_private
+            / "hidden.txt"
+        ).write_text(
+            "hidden\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        (
+            second_private
+            / "visible.txt"
+        ).write_text(
+            "visible\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        manifest = scan_project(
+            self.project,
+            {
+                "IGNORE_FOLDERS": [
+                    "docs/private",
+                    "*.egg-info",
+                    "node_modules",
+                ],
+                "IGNORE_FILES": [
+                    "*.bak",
+                ],
+            },
+        )
+
+        relative_files = {
+            scanned_file.relative_path
+            for scanned_file in manifest.files
+        }
+
+        self.assertNotIn(
+            "docs/private/hidden.txt",
+            relative_files,
+        )
+
+        self.assertIn(
+            "src/docs/private/visible.txt",
+            relative_files,
+        )
+
+    def test_root_gitignore_filters_files_and_supports_negation(
+        self,
+    ) -> None:
+        (
+            self.project
+            / ".gitignore"
+        ).write_text(
+            "/generated/\n"
+            "*.tmp\n"
+            "!keep.tmp\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        generated = (
+            self.project
+            / "generated"
+        )
+
+        generated.mkdir()
+
+        (
+            generated
+            / "ignored.txt"
+        ).write_text(
+            "generated\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        (
+            self.project
+            / "drop.tmp"
+        ).write_text(
+            "drop\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        (
+            self.project
+            / "keep.tmp"
+        ).write_text(
+            "keep\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        manifest = scan_project(
+            self.project,
+            {
+                "IGNORE_FOLDERS": [
+                    "*.egg-info",
+                    "node_modules",
+                ],
+                "IGNORE_FILES": [
+                    "*.bak",
+                ],
+            },
+        )
+
+        relative_files = {
+            scanned_file.relative_path
+            for scanned_file in manifest.files
+        }
+
+        self.assertNotIn(
+            "generated/ignored.txt",
+            relative_files,
+        )
+
+        self.assertNotIn(
+            "drop.tmp",
+            relative_files,
+        )
+
+        self.assertIn(
+            "keep.tmp",
+            relative_files,
+        )
+
+    def test_nested_gitignore_can_override_parent_file_rule(
+        self,
+    ) -> None:
+        (
+            self.project
+            / ".gitignore"
+        ).write_text(
+            "*.log\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        source = (
+            self.project
+            / "src"
+        )
+
+        (
+            source
+            / ".gitignore"
+        ).write_text(
+            "!keep.log\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        (
+            source
+            / "keep.log"
+        ).write_text(
+            "keep\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        (
+            source
+            / "drop.log"
+        ).write_text(
+            "drop\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        manifest = scan_project(
+            self.project,
+            {
+                "IGNORE_FOLDERS": [
+                    "*.egg-info",
+                    "node_modules",
+                ],
+                "IGNORE_FILES": [
+                    "*.bak",
+                ],
+            },
+        )
+
+        relative_files = {
+            scanned_file.relative_path
+            for scanned_file in manifest.files
+        }
+
+        self.assertIn(
+            "src/keep.log",
+            relative_files,
+        )
+
+        self.assertNotIn(
+            "src/drop.log",
+            relative_files,
+        )
+
+    def test_excluded_parent_directory_is_not_reincluded_by_nested_gitignore(
+        self,
+    ) -> None:
+        (
+            self.project
+            / ".gitignore"
+        ).write_text(
+            "/generated/\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        generated = (
+            self.project
+            / "generated"
+        )
+
+        generated.mkdir()
+
+        (
+            generated
+            / ".gitignore"
+        ).write_text(
+            "!keep.txt\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        (
+            generated
+            / "keep.txt"
+        ).write_text(
+            "keep\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        manifest = scan_project(
+            self.project,
+            {
+                "IGNORE_FOLDERS": [
+                    "*.egg-info",
+                    "node_modules",
+                ],
+                "IGNORE_FILES": [
+                    "*.bak",
+                ],
+            },
+        )
+
+        relative_files = {
+            scanned_file.relative_path
+            for scanned_file in manifest.files
+        }
+
+        self.assertNotIn(
+            "generated/keep.txt",
+            relative_files,
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

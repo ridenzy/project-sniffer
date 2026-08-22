@@ -14,6 +14,7 @@ from project_sniffer.report_builder import (
     build_report,
 )
 from project_sniffer.scanner import (
+    ScanError,
     scan_project,
 )
 
@@ -171,13 +172,20 @@ def run_analysis(
         "\nScanning project..."
     )
 
-    manifest = scan_project(
-        project_path,
-        ignore,
-        excluded_directories=(
-            output_directory,
-        ),
-    )
+    try:
+        manifest = scan_project(
+            project_path,
+            ignore,
+            excluded_directories=(
+                output_directory,
+            ),
+        )
+    except ScanError as error:
+        print(
+            f"Error: scan: {error}",
+            file=sys.stderr,
+        )
+        return INVALID_INPUT
 
     print(
         "Scanned files after ignores: "

@@ -73,5 +73,58 @@ class IgnoreMatcherTests(
         )
 
 
+    def test_project_relative_folder_rule_matches_only_intended_path(
+        self,
+    ) -> None:
+        matcher = IgnoreMatcher.from_config(
+            {
+                "IGNORE_FOLDERS": [
+                    "docs/private",
+                ],
+                "IGNORE_FILES": [],
+            }
+        )
+
+        self.assertTrue(
+            matcher.matches_folder(
+                "private",
+                "docs/private",
+            )
+        )
+
+        self.assertFalse(
+            matcher.matches_folder(
+                "private",
+                "src/docs/private",
+            )
+        )
+
+    def test_root_anchored_file_rule_matches_only_project_root(
+        self,
+    ) -> None:
+        matcher = IgnoreMatcher.from_config(
+            {
+                "IGNORE_FOLDERS": [],
+                "IGNORE_FILES": [
+                    "/project.local.json",
+                ],
+            }
+        )
+
+        self.assertTrue(
+            matcher.matches_file(
+                "project.local.json",
+                "project.local.json",
+            )
+        )
+
+        self.assertFalse(
+            matcher.matches_file(
+                "project.local.json",
+                "config/project.local.json",
+            )
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

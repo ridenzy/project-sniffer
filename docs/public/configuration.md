@@ -150,6 +150,24 @@ reference.
 The installed `sniff` command no longer selects personal configuration from its
 invocation working directory.
 
+## Target-project `.gitignore`
+
+The shared scanner reads `.gitignore` files inside the target project.
+
+Nested `.gitignore` files apply relative to their own directory and can
+override matching parent `.gitignore` rules.
+
+This discovery layer is intentionally separate from Project Sniffer's own
+configuration precedence.
+
+Project Sniffer does not currently consume `.git/info/exclude` or user-global
+Git ignore configuration, because those machine-specific sources would make
+the same target project produce different scan manifests on different
+machines.
+
+Project Sniffer recommended and personal exclusions remain stronger than
+target `.gitignore` rules.
+
 ## Planned project-owned configuration
 
 A target project may later provide:

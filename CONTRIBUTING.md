@@ -125,6 +125,9 @@ The packaged architecture and source-report analyzers share one scan manifest.
 New analyzer code must consume that shared evidence rather than introducing
 another independent project walk.
 
+Target-project `.gitignore` handling also belongs to that shared discovery
+layer. Do not implement separate ignore walks inside individual analyzers.
+
 As the package and formal test suite are introduced, this section will be
 updated with the canonical package, lint, type-check, and test commands.
 

@@ -4,6 +4,9 @@ import os
 from collections.abc import Iterable
 from pathlib import Path
 
+from project_sniffer.scanning.gitignore_matcher import (
+    GitIgnoreMatcher,
+)
 from project_sniffer.scanning.ignore_matcher import (
     IgnoreMatcher,
 )
@@ -43,11 +46,12 @@ def scan_project(
     """
     Walk the target project once and return a deterministic scan manifest.
 
-    Current ignore support covers exact basename rules and shell-style glob
-    patterns inside IGNORE_FOLDERS and IGNORE_FILES.
+    Configuration ignore rules support exact basenames, basename globs, and
+    project-relative path patterns.
 
-    Project-relative path rules and .gitignore semantics remain separate
-    follow-on work.
+    Target-project .gitignore files are loaded as directories are reached, so
+    deeper .gitignore files can override matching rules inherited from parent
+    directories.
     """
 
     project_path = (
@@ -60,6 +64,10 @@ def scan_project(
 
     matcher = IgnoreMatcher.from_config(
         ignore
+    )
+
+    gitignore_matcher = (
+        GitIgnoreMatcher()
     )
 
     excluded = (
@@ -80,6 +88,23 @@ def scan_project(
             root
         )
 
+        relative_root_path = (
+            current_root.relative_to(
+                project_path
+            )
+        )
+
+        relative_root = (
+            ""
+            if not relative_root_path.parts
+            else relative_root_path.as_posix()
+        )
+
+        gitignore_matcher.load_directory(
+            directory_path=current_root,
+            relative_directory=relative_root,
+        )
+
         kept_directories: list[str] = []
 
         for directory_name in sorted(
@@ -90,8 +115,16 @@ def scan_project(
                 / directory_name
             )
 
+            relative_directory = (
+                candidate.relative_to(
+                    project_path
+                )
+                .as_posix()
+            )
+
             if matcher.matches_folder(
-                directory_name
+                directory_name,
+                relative_directory,
             ):
                 continue
 
@@ -101,31 +134,25 @@ def scan_project(
             ):
                 continue
 
+            if gitignore_matcher.matches_directory(
+                relative_directory
+            ):
+                continue
+
             kept_directories.append(
                 directory_name
             )
 
         dirs[:] = kept_directories
 
-        relative_root = (
-            current_root.relative_to(
-                project_path
-            )
-        )
-
-        if relative_root.parts:
+        if relative_root:
             directories.append(
-                relative_root.as_posix()
+                relative_root
             )
 
         for filename in sorted(
             files
         ):
-            if matcher.matches_file(
-                filename
-            ):
-                continue
-
             absolute_path = (
                 current_root
                 / filename
@@ -137,6 +164,17 @@ def scan_project(
                 )
                 .as_posix()
             )
+
+            if matcher.matches_file(
+                filename,
+                relative_path,
+            ):
+                continue
+
+            if gitignore_matcher.matches_file(
+                relative_path
+            ):
+                continue
 
             scanned_files.append(
                 ScannedFile(
