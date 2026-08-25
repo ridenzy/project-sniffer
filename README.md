@@ -35,9 +35,8 @@ project-specific subdirectory:
 PATH/<project-name>/<files>
 ```
 
-The original root-level `main.py` runtime remains temporarily available as a
-migration and regression reference until the packaged runtime fully replaces
-it.
+The root-level `main.py` remains available as a positional compatibility entry
+point and now delegates to the same packaged runtime used by `sniff`.
 
 ## Current capabilities
 

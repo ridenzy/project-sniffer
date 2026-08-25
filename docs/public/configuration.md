@@ -134,21 +134,28 @@ Absolute local paths are permitted inside this private machine-local registry.
 
 They must not be copied into generated public examples or uploadable reports.
 
-## Legacy root runtime
+## Root compatibility entry point
 
-The original root-level:
+The root-level:
 
 ```text
 main.py
 ```
 
-still uses the repository-root legacy JSON configuration.
+is now a positional compatibility bridge to the packaged application runtime.
 
-That path remains temporarily available only as a migration/regression
-reference.
+Both:
 
-The installed `sniff` command no longer selects personal configuration from its
-invocation working directory.
+```text
+sniff
+python3 main.py /path/to/project
+```
+
+use packaged recommended ignores, the deterministic machine-local personal
+registry, and the same shared scanner.
+
+The repository-root `personal_ignores.json` remains private legacy material and
+is not authoritative for either current entry point.
 
 ## Target-project `.gitignore`
 

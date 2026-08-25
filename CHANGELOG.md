@@ -27,6 +27,7 @@ The project is still in pre-1.0 development.
 - Project-relative Project Sniffer ignore patterns.
 - Nested target-project `.gitignore` matching with Git-style negation and lower-level overrides.
 - Symlink-safe `.gitignore` loading and controlled scan-policy errors.
+- Root-level `main.py` compatibility bridge to the packaged analysis runtime.
 - Maintained public architecture documentation.
 - Maintained configuration and ignore-rule documentation.
 - Expanded repository-local Git ignore protection.

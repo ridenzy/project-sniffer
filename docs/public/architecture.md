@@ -28,12 +28,13 @@ The first packaged analyzers now support `--architecture` and `--report`.
 The package also contains its recommended ignore configuration as a packaged
 resource.
 
-The original root-level runtime remains temporarily available as a regression
-reference while the migration continues.
+The root-level `main.py` remains available as a positional compatibility entry
+point and delegates to `project_sniffer.application`.
 
-The packaged architecture and source-report analyzers now consume one shared
-scan manifest produced by a single deterministic project walk. The legacy
-root-level runtime remains separate during the migration period.
+The packaged architecture and source-report analyzers, including the root
+compatibility entry point, now consume the same configuration, shared scanner,
+single scan manifest, architecture builder, and source-report builder. The
+older flat helper modules remain only as migration and regression references.
 
 ## Existing behavior to preserve
 
@@ -55,10 +56,10 @@ The current code still has several deliberate migration targets:
 
 1. Target-project `.project-sniffer.toml` and explicit `--config` are not
    implemented yet.
-2. Root-level and packaged scanner/report modules temporarily coexist.
-3. The legacy root runtime still has its own repository-local configuration.
-4. Legacy DOCX dependencies still remain in `requirements.txt`.
-5. Safe file-reading and non-overridable secret-bearing exclusions are not
+2. Older flat scanner/report helper modules temporarily coexist as migration
+   references, but the root `main.py` entry point no longer executes them.
+3. Legacy DOCX dependencies still remain in `requirements.txt`.
+4. Safe file-reading and non-overridable secret-bearing exclusions are not
    implemented yet.
 
 ## Target 1.0 analyzer surface

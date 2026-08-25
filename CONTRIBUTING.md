@@ -39,11 +39,13 @@ reports/<project-name>/<files>
 A custom `--output PATH` changes the base output directory but still keeps the
 project-specific subdirectory.
 
-The original root runtime remains temporarily available as a compatibility and
-regression reference:
+The root-level `main.py` remains available as a positional compatibility entry
+point and delegates to the packaged runtime.
+
+The older flat helper modules remain temporarily as migration and regression
+references:
 
 ```text
-main.py
 scanner.py
 architecture_builder.py
 report_builder.py
@@ -51,8 +53,9 @@ utils.py
 recommended_ignores.json
 ```
 
-Do not remove those legacy modules until the packaged scanner/configuration
-migration has completed and equivalent behavior remains covered by tests.
+Do not add new runtime behavior to those flat helper modules. Authoritative
+scanner, configuration, architecture, and source-report behavior belongs under
+`src/project_sniffer/`.
 
 ## Private and generated material
 
@@ -86,14 +89,16 @@ schema-version-1 per-project registry
 
 The canonical machine-local registry is resolved outside the repository.
 
-The repository-root private file remains only for the temporary legacy
-`main.py` compatibility path.
+The repository-root private file remains only as private legacy material.
+Neither `sniff` nor the current root `main.py` uses it as authoritative
+configuration.
 
 Do not commit either machine-local or repository-root personal configuration.
 
 ## Baseline validation
 
-For changes touching the current flat runtime, run at minimum:
+For changes touching the root compatibility entry point or retained flat
+reference modules, run at minimum:
 
 ```bash
 python3 -m compileall \
