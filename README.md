@@ -48,6 +48,9 @@ The existing implementation can:
 - exclude the active Project Sniffer output directory from repeat scans;
 - generate a project tree;
 - generate a readable Markdown source report;
+- read source-report files through a shared safe-reader evidence boundary;
+- refuse to follow discovered file symlinks for source content;
+- distinguish escaped symlinks and reject paths outside the resolved project root;
 - skip obvious binary files;
 - tolerate unreadable files;
 - clean unsafe control characters;
@@ -95,8 +98,9 @@ Generated reports may contain proprietary source code, internal configuration,
 personal information, or other sensitive material. Review reports before
 sharing them.
 
-Secret-bearing files will receive stronger non-overridable handling as the
-safe-reader boundary and security analyzer are introduced.
+The safe-reader boundary and filesystem-containment checks are now in place.
+Recognized secret-bearing files still require stronger non-overridable exclusion
+before the stable `--secret` analyzer.
 
 ## Configuration direction
 

@@ -19,6 +19,7 @@ sniff
              |
              +-- project_sniffer.config
              +-- project_sniffer.scanner
+             +-- project_sniffer.reading
              +-- project_sniffer.architecture_builder
              +-- project_sniffer.report_builder
 ```
@@ -59,8 +60,8 @@ The current code still has several deliberate migration targets:
 2. Older flat scanner/report helper modules temporarily coexist as migration
    references, but the root `main.py` entry point no longer executes them.
 3. Legacy DOCX dependencies still remain in `requirements.txt`.
-4. Safe file-reading and non-overridable secret-bearing exclusions are not
-   implemented yet.
+4. Non-overridable secret-bearing exclusions and bounded oversized-file
+   handling are not implemented yet.
 
 ## Target 1.0 analyzer surface
 
@@ -104,6 +105,13 @@ Markdown and JSON reporting
 
 Architecture and source-report generation now consume the same shared scan
 manifest and do not introduce separate filesystem discovery walks.
+
+The source-report path passes discovered files through `project_sniffer.reading`
+before Markdown rendering. The reader returns immutable `FileReadResult`
+evidence, rejects paths outside the resolved project root or inconsistent with
+the manifest, and does not follow discovered file symlinks for source content.
+Binary, unreadable, ordinary-symlink, and escaped-symlink outcomes are
+classified before `project_sniffer.report_builder` receives any source text.
 
 ## Core safety model
 

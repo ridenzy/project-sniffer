@@ -28,6 +28,9 @@ The project is still in pre-1.0 development.
 - Nested target-project `.gitignore` matching with Git-style negation and lower-level overrides.
 - Symlink-safe `.gitignore` loading and controlled scan-policy errors.
 - Root-level `main.py` compatibility bridge to the packaged analysis runtime.
+- Shared safe-file reader producing immutable `FileReadResult` evidence before
+  source-report rendering.
+- Source-report integration through the shared safe-reader boundary.
 - Maintained public architecture documentation.
 - Maintained configuration and ignore-rule documentation.
 - Expanded repository-local Git ignore protection.
@@ -37,3 +40,5 @@ The project is still in pre-1.0 development.
 - Completed the initial tracked-content publication audit before public
   repository restructuring.
 - Confirmed generated reports and private working documentation are not tracked.
+- Source reports no longer follow discovered file symlinks and reject escaped,
+  outside-project, or manifest/path-mismatch source paths before reading content.

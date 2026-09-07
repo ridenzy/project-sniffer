@@ -10,6 +10,9 @@ from project_sniffer.config import (
     ConfigurationError,
     load_ignore_config,
 )
+from project_sniffer.reading import (
+    read_manifest_files,
+)
 from project_sniffer.report_builder import (
     build_report,
 )
@@ -264,20 +267,14 @@ def run_analysis(
         )
 
         try:
+            read_results = read_manifest_files(
+                manifest
+            )
+
             build_report(
-                project_path=str(
-                    project_path
-                ),
-                file_paths=[
-                    str(
-                        scanned_file.absolute_path
-                    )
-                    for scanned_file in manifest.files
-                ],
-                ignore=ignore,
-                output_path=str(
-                    report_output
-                ),
+                project_path=project_path,
+                read_results=read_results,
+                output_path=report_output,
             )
         except OSError as error:
             print(

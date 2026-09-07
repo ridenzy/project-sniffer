@@ -1,134 +1,23 @@
 from __future__ import annotations
 
-import os
+from collections.abc import Sequence
+from pathlib import Path
 
-from project_sniffer.scanning import IgnoreMatcher
+from project_sniffer.reading import (
+    FileReadResult,
+    FileReadStatus,
+)
 
 
 OUTPUT_PATH = "reports/project-report.md"
 
 
-def is_valid_xml_char(char: str) -> bool:
-    """
-    XML 1.0 valid character ranges.
-
-    This validation is retained from the DOCX report builder so that
-    control characters and other unsafe characters are still removed
-    from generated reports.
-    """
-
-    codepoint = ord(char)
-
-    return (
-        codepoint == 0x09
-        or codepoint == 0x0A
-        or codepoint == 0x0D
-        or 0x20 <= codepoint <= 0xD7FF
-        or 0xE000 <= codepoint <= 0xFFFD
-        or 0x10000 <= codepoint <= 0x10FFFF
-    )
-
-
-def clean_text(text: str) -> str:
-    """
-    Remove every character that is not safe for the generated report.
-    """
-
-    return "".join(
-        char
-        for char in text
-        if is_valid_xml_char(char)
-    )
-
-
-def is_binary(file_path):
-    """
-    Detect whether a file is binary.
-
-    An unreadable file is not classified as binary here. The later text-read
-    stage owns unreadable-file handling so that it can record the file in the
-    correct report-summary category.
-    """
-
-    try:
-        with open(
-            file_path,
-            "rb",
-        ) as file_handle:
-            chunk = file_handle.read(
-                2048
-            )
-
-        return b"\x00" in chunk
-
-    except OSError:
-        return False
-
-
-def should_skip_file(
-    path,
-    project_path,
-    ignore,
-):
-    """
-    Decide whether a file should be skipped using the shared ignore matcher.
-    """
-
-    matcher = IgnoreMatcher.from_config(
-        ignore
-    )
-
-    relative_path = os.path.relpath(
-        path,
-        start=project_path,
-    )
-
-    path_parts = relative_path.split(
-        os.sep
-    )
-
-    filename = os.path.basename(
-        path
-    )
-
-    normalized_relative_path = (
-        relative_path.replace(
-            os.sep,
-            "/",
-        )
-    )
-
-    if matcher.matches_file(
-        filename,
-        normalized_relative_path,
-    ):
-        return True
-
-    for index, part in enumerate(
-        path_parts[:-1]
-    ):
-        relative_folder_path = "/".join(
-            path_parts[
-                :index + 1
-            ]
-        )
-
-        if matcher.matches_folder(
-            part,
-            relative_folder_path,
-        ):
-            return True
-
-    return False
-
-
-def get_safe_markdown_fence(content):
+def get_safe_markdown_fence(
+    content: str,
+) -> str:
     """
     Create a Markdown code fence that cannot be accidentally closed
     by backticks contained inside the source file.
-
-    For example, if the file contains three consecutive backticks,
-    the generated report will use four or more backticks around it.
     """
 
     longest_backtick_run = 0
@@ -154,15 +43,15 @@ def get_safe_markdown_fence(content):
 
 
 def add_text_safely(
-    report_sections,
-    relative_path,
-    content,
-):
+    report_sections: list[str],
+    relative_path: str,
+    content: str,
+) -> None:
     """
-    Add file content to the Markdown report safely.
+    Add already-read text content to the Markdown report safely.
 
-    If a file is very large, split it into chunks so the report builder
-    does not create one massive in-memory string section.
+    Files are read and classified before they reach this module. This builder
+    owns Markdown rendering and output writing, not target-project file access.
     """
 
     report_sections.append(
@@ -212,98 +101,161 @@ def add_text_safely(
     )
 
 
-def build_report(
-    project_path,
-    file_paths,
-    ignore=None,
-    output_path=OUTPUT_PATH,
-):
-    """
-    Generate a Markdown document containing readable project source files.
-
-    This version is crash-resistant:
-
-    - skips ignored files
-    - skips binary files
-    - cleans invalid control characters
-    - skips only the problematic file if Markdown insertion fails
-    - prints exactly which files were added/skipped
-    """
-
-    ignore = ignore or {}
-
-    project_path = os.path.abspath(
-        project_path
+def _unreadable_detail(
+    result: FileReadResult,
+) -> str:
+    error_type = (
+        result.error_type
+        or "UnknownError"
     )
 
-    project_name = os.path.basename(
-        project_path
-    )
-
-    report_sections = []
-
-    report_sections.append(
-        "# Project Report\n\n"
-    )
-
-    report_sections.append(
-        f"**Project:** `{project_name}`\n\n"
-    )
-
-    report_sections.append(
-        "---\n\n"
-    )
-
-    added_files = 0
-    skipped_ignored = 0
-    skipped_binary = 0
-    skipped_unreadable = 0
-    skipped_markdown_error = 0
-
-    for path in file_paths:
-        relative_path = os.path.relpath(
-            path,
-            start=project_path,
+    if result.error_message:
+        return (
+            f"{error_type}: "
+            f"{result.error_message}"
         )
 
-        if should_skip_file(
-            path,
-            project_path,
-            ignore,
-        ):
-            skipped_ignored += 1
-            continue
+    return error_type
 
-        if is_binary(
-            path
+
+def build_report(
+    project_path: str | Path,
+    read_results: Sequence[FileReadResult],
+    output_path: str | Path = OUTPUT_PATH,
+) -> None:
+    """
+    Generate a Markdown source report from safe-reader results.
+
+    Ignore handling belongs to the shared discovery manifest. Target-project
+    content is never opened here: this function only renders FileReadResult
+    evidence and writes the generated Project Sniffer report.
+    """
+
+    project_root = (
+        Path(
+            project_path
+        )
+        .expanduser()
+        .resolve()
+    )
+
+    project_name = (
+        project_root.name
+        or "root"
+    )
+
+    report_sections = [
+        "# Project Report\n\n",
+        f"**Project:** `{project_name}`\n\n",
+        "---\n\n",
+    ]
+
+    added_files = 0
+
+    # Ignore filtering occurs before the read phase. This compatibility count
+    # is retained during the 0.x migration so existing report summaries keep
+    # their established shape.
+    skipped_ignored = 0
+
+    skipped_binary = 0
+    skipped_unreadable = 0
+    skipped_symlink = 0
+    skipped_unsafe_path = 0
+    skipped_markdown_error = 0
+
+    unsafe_statuses = {
+        FileReadStatus.ESCAPED_SYMLINK,
+        FileReadStatus.OUTSIDE_PROJECT,
+        FileReadStatus.PATH_MISMATCH,
+    }
+
+    for result in read_results:
+        relative_path = (
+            result
+            .scanned_file
+            .relative_path
+        )
+
+        if (
+            result.status
+            is FileReadStatus.BINARY
         ):
             skipped_binary += 1
 
             print(
-                f"[SKIP binary] {relative_path}"
+                f"[SKIP binary] "
+                f"{relative_path}"
             )
 
             continue
 
-        try:
-            with open(
-                path,
-                "r",
-                encoding="utf-8",
-                errors="ignore",
-            ) as file_handle:
-                content = file_handle.read()
-
-            content = clean_text(
-                content
-            )
-
-        except Exception as error:
+        if (
+            result.status
+            is FileReadStatus.UNREADABLE
+        ):
             skipped_unreadable += 1
 
             print(
                 f"[SKIP unreadable] "
-                f"{relative_path} -> {error}"
+                f"{relative_path} -> "
+                f"{_unreadable_detail(result)}"
+            )
+
+            continue
+
+        if (
+            result.status
+            is FileReadStatus.SYMLINK
+        ):
+            skipped_symlink += 1
+
+            print(
+                f"[SKIP symlink] "
+                f"{relative_path}"
+            )
+
+            continue
+
+        if result.status in unsafe_statuses:
+            skipped_unsafe_path += 1
+
+            label = (
+                result.status.value.replace(
+                    "_",
+                    "-",
+                )
+            )
+
+            print(
+                f"[SKIP {label}] "
+                f"{relative_path}"
+            )
+
+            continue
+
+        if (
+            result.status
+            is not FileReadStatus.TEXT
+        ):
+            skipped_unsafe_path += 1
+
+            print(
+                f"[SKIP invalid-read-status] "
+                f"{relative_path} -> "
+                f"{result.status!r}"
+            )
+
+            continue
+
+        content = result.content
+
+        if content is None:
+            skipped_unreadable += 1
+
+            print(
+                f"[SKIP invalid-read-result] "
+                f"{relative_path} -> "
+                "TEXT result has no content"
             )
 
             continue
@@ -326,61 +278,60 @@ def build_report(
 
             print(
                 f"[SKIP markdown-error] "
-                f"{relative_path} -> {error}"
+                f"{relative_path} -> "
+                f"{type(error).__name__}: "
+                f"{error}"
             )
 
-            continue
-
-    output_directory = os.path.dirname(
+    output = Path(
         output_path
     )
 
-    if output_directory:
-        os.makedirs(
-            output_directory,
-            exist_ok=True,
-        )
+    output.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
 
-    with open(
-        output_path,
-        "w",
+    output.write_text(
+        "".join(
+            report_sections
+        ),
         encoding="utf-8",
         newline="\n",
-    ) as report_file:
-        report_file.writelines(
-            report_sections
-        )
+    )
 
     print(
         "\nReport summary:"
     )
-
     print(
         f"  Added text files: "
         f"{added_files}"
     )
-
     print(
         f"  Skipped ignored files: "
         f"{skipped_ignored}"
     )
-
     print(
         f"  Skipped binary files: "
         f"{skipped_binary}"
     )
-
     print(
         f"  Skipped unreadable files: "
         f"{skipped_unreadable}"
     )
-
+    print(
+        f"  Skipped symlink files: "
+        f"{skipped_symlink}"
+    )
+    print(
+        f"  Skipped unsafe-path files: "
+        f"{skipped_unsafe_path}"
+    )
     print(
         f"  Skipped markdown-error files: "
         f"{skipped_markdown_error}"
     )
-
     print(
         f"  Report saved to: "
-        f"{output_path}"
+        f"{output}"
     )
