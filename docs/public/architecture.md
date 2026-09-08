@@ -33,9 +33,10 @@ The root-level `main.py` remains available as a positional compatibility entry
 point and delegates to `project_sniffer.application`.
 
 The packaged architecture and source-report analyzers, including the root
-compatibility entry point, now consume the same configuration, shared scanner,
-single scan manifest, architecture builder, and source-report builder. The
-older flat helper modules remain only as migration and regression references.
+compatibility entry point, consume the same configuration, shared scanner,
+single scan manifest, safe-reader boundary, architecture builder, and
+source-report builder. Obsolete parallel flat runtime implementations have been
+removed so `src/project_sniffer/` is the single runtime authority.
 
 ## Existing behavior to preserve
 
@@ -58,10 +59,7 @@ The current code still has several deliberate migration targets:
 
 1. Target-project `.project-sniffer.toml` and explicit `--config` are not
    implemented yet.
-2. Older flat scanner/report helper modules temporarily coexist as migration
-   references, but the root `main.py` entry point no longer executes them.
-3. Legacy DOCX dependencies still remain in `requirements.txt`.
-4. Non-overridable secret-bearing exclusions are not implemented yet.
+2. Non-overridable secret-bearing exclusions are not implemented yet.
 
 ## Target 1.0 analyzer surface
 

@@ -42,6 +42,16 @@ class ProjectSnifferCliTests(
                     help_text,
                 )
 
+        self.assertIn(
+            "Implemented analyzers currently available:",
+            help_text,
+        )
+
+        self.assertNotIn(
+            "Phase 1 checkpoint",
+            help_text,
+        )
+
     def test_help_flag_exits_successfully(
         self,
     ) -> None:

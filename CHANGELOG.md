@@ -37,6 +37,14 @@ The project is still in pre-1.0 development.
 - Maintained configuration and ignore-rule documentation.
 - Expanded repository-local Git ignore protection.
 
+### Removed
+
+- Obsolete root-level scanner, architecture-builder, report-builder, utility,
+  and duplicate recommended-ignore implementations after packaged-runtime
+  convergence.
+- Legacy `requirements.txt` containing unused DOCX-era dependencies; package
+  dependencies are defined by `pyproject.toml`.
+
 ### Security
 
 - Completed the initial tracked-content publication audit before public

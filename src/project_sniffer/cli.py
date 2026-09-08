@@ -20,7 +20,7 @@ target-project code.
 """
 
 _EPILOG = """\
-Implemented analyzers in this Phase 1 checkpoint:
+Implemented analyzers currently available:
   --architecture    Generate the current project-tree architecture report.
   --report          Generate the current readable Markdown source report.
 

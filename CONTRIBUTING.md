@@ -3,8 +3,9 @@
 Thank you for considering a contribution to Project Sniffer.
 
 Project Sniffer is currently a pre-1.0, local-first repository-intelligence
-tool. The project is being migrated from a small flat Python runtime into an
-installable package while preserving the behaviour that already works.
+tool. The authoritative runtime now lives in the installable `project_sniffer`
+package while the root `main.py` remains as a positional compatibility entry
+point.
 
 ## Core project boundaries
 
@@ -42,20 +43,9 @@ project-specific subdirectory.
 The root-level `main.py` remains available as a positional compatibility entry
 point and delegates to the packaged runtime.
 
-The older flat helper modules remain temporarily as migration and regression
-references:
-
-```text
-scanner.py
-architecture_builder.py
-report_builder.py
-utils.py
-recommended_ignores.json
-```
-
-Do not add new runtime behavior to those flat helper modules. Authoritative
-scanner, configuration, architecture, and source-report behavior belongs under
-`src/project_sniffer/`.
+Authoritative scanner, configuration, safe-reading, architecture, and
+source-report behavior belongs under `src/project_sniffer/`. Do not recreate
+parallel root-level implementations of packaged runtime modules.
 
 ## Private and generated material
 
@@ -97,27 +87,15 @@ Do not commit either machine-local or repository-root personal configuration.
 
 ## Baseline validation
 
-For changes touching the root compatibility entry point or retained flat
-reference modules, run at minimum:
+For changes touching the root compatibility entry point or packaged runtime,
+run at minimum:
 
 ```bash
-python3 -m compileall \
-    -q \
-    main.py \
-    scanner.py \
-    architecture_builder.py \
-    report_builder.py \
-    utils.py
+python3 -m compileall -q main.py src/project_sniffer tests
 
-python3 -m json.tool \
-    recommended_ignores.json \
-    >/dev/null
+python3 -m json.tool src/project_sniffer/resources/recommended_ignores.json >/dev/null
 
-python3 -m unittest \
-    discover \
-    -s tests \
-    -p 'test_*.py' \
-    -v
+python3 -m unittest discover -s tests -p 'test_*.py' -v
 
 git diff --check
 ```
@@ -139,8 +117,8 @@ control-character cleaning remain centralized.
 Target-project `.gitignore` handling also belongs to that shared discovery
 layer. Do not implement separate ignore walks inside individual analyzers.
 
-As the package and formal test suite are introduced, this section will be
-updated with the canonical package, lint, type-check, and test commands.
+Keep these baseline commands aligned with the packaged runtime as additional
+analyzers and validation tools are introduced.
 
 ## Commit sign-off
 
