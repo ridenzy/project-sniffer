@@ -12,6 +12,7 @@ from project_sniffer.scanning.models import (
 class FileReadStatus(str, Enum):
     TEXT = "text"
     BINARY = "binary"
+    OVERSIZED = "oversized"
     SYMLINK = "symlink"
     ESCAPED_SYMLINK = "escaped_symlink"
     UNREADABLE = "unreadable"

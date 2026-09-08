@@ -31,6 +31,8 @@ The project is still in pre-1.0 development.
 - Shared safe-file reader producing immutable `FileReadResult` evidence before
   source-report rendering.
 - Source-report integration through the shared safe-reader boundary.
+- Bounded source reading with an 8 MiB default per-file ceiling and explicit
+  oversized-file classification.
 - Maintained public architecture documentation.
 - Maintained configuration and ignore-rule documentation.
 - Expanded repository-local Git ignore protection.
@@ -42,3 +44,5 @@ The project is still in pre-1.0 development.
 - Confirmed generated reports and private working documentation are not tracked.
 - Source reports no longer follow discovered file symlinks and reject escaped,
   outside-project, or manifest/path-mismatch source paths before reading content.
+- Oversized source files are skipped without loading their full content, and
+  non-regular filesystem entries are refused before source content is opened.

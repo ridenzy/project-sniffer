@@ -44,6 +44,7 @@ The package refactor must preserve:
 - directory pruning for ignored folders;
 - readable relative paths;
 - binary-file skipping;
+- bounded per-file source reading with explicit oversized-file classification;
 - unreadable-file tolerance;
 - control-character cleaning;
 - safe Markdown fencing;
@@ -60,8 +61,7 @@ The current code still has several deliberate migration targets:
 2. Older flat scanner/report helper modules temporarily coexist as migration
    references, but the root `main.py` entry point no longer executes them.
 3. Legacy DOCX dependencies still remain in `requirements.txt`.
-4. Non-overridable secret-bearing exclusions and bounded oversized-file
-   handling are not implemented yet.
+4. Non-overridable secret-bearing exclusions are not implemented yet.
 
 ## Target 1.0 analyzer surface
 
@@ -110,8 +110,10 @@ The source-report path passes discovered files through `project_sniffer.reading`
 before Markdown rendering. The reader returns immutable `FileReadResult`
 evidence, rejects paths outside the resolved project root or inconsistent with
 the manifest, and does not follow discovered file symlinks for source content.
-Binary, unreadable, ordinary-symlink, and escaped-symlink outcomes are
-classified before `project_sniffer.report_builder` receives any source text.
+Binary, oversized, unreadable, ordinary-symlink, and escaped-symlink outcomes
+are classified before `project_sniffer.report_builder` receives any source text.
+The reader applies an 8 MiB default per-file source-read ceiling and rejects
+non-regular filesystem entries before source content is opened.
 
 ## Core safety model
 

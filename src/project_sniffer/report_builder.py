@@ -158,6 +158,7 @@ def build_report(
     skipped_ignored = 0
 
     skipped_binary = 0
+    skipped_oversized = 0
     skipped_unreadable = 0
     skipped_symlink = 0
     skipped_unsafe_path = 0
@@ -185,6 +186,28 @@ def build_report(
             print(
                 f"[SKIP binary] "
                 f"{relative_path}"
+            )
+
+            continue
+
+        if (
+            result.status
+            is FileReadStatus.OVERSIZED
+        ):
+            skipped_oversized += 1
+
+            size_detail = (
+                "unknown size"
+                if result.size_bytes is None
+                else (
+                    f"{result.size_bytes} bytes"
+                )
+            )
+
+            print(
+                f"[SKIP oversized] "
+                f"{relative_path} -> "
+                f"{size_detail}"
             )
 
             continue
@@ -314,6 +337,10 @@ def build_report(
     print(
         f"  Skipped binary files: "
         f"{skipped_binary}"
+    )
+    print(
+        f"  Skipped oversized files: "
+        f"{skipped_oversized}"
     )
     print(
         f"  Skipped unreadable files: "

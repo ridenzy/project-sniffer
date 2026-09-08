@@ -52,6 +52,8 @@ The existing implementation can:
 - refuse to follow discovered file symlinks for source content;
 - distinguish escaped symlinks and reject paths outside the resolved project root;
 - skip obvious binary files;
+- enforce an 8 MiB default per-file source-read ceiling and classify oversized
+  files without loading their full content;
 - tolerate unreadable files;
 - clean unsafe control characters;
 - generate Markdown fences that do not collide with source backticks;
@@ -98,7 +100,8 @@ Generated reports may contain proprietary source code, internal configuration,
 personal information, or other sensitive material. Review reports before
 sharing them.
 
-The safe-reader boundary and filesystem-containment checks are now in place.
+The safe-reader boundary now includes filesystem containment, file-symlink
+refusal, regular-file checks, and an 8 MiB default per-file source-read ceiling.
 Recognized secret-bearing files still require stronger non-overridable exclusion
 before the stable `--secret` analyzer.
 

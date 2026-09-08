@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import stat
 from pathlib import Path
 
 from project_sniffer.reading.models import (
@@ -11,6 +12,30 @@ from project_sniffer.scanning.models import (
     ScanManifest,
     ScannedFile,
 )
+
+
+DEFAULT_MAX_SOURCE_BYTES = 8 * 1024 * 1024
+
+
+def _validate_max_source_bytes(
+    max_source_bytes: int,
+) -> int:
+    if (
+        isinstance(
+            max_source_bytes,
+            bool,
+        )
+        or not isinstance(
+            max_source_bytes,
+            int,
+        )
+        or max_source_bytes < 1
+    ):
+        raise ValueError(
+            "max_source_bytes must be a positive integer"
+        )
+
+    return max_source_bytes
 
 
 def _is_valid_text_char(
@@ -95,14 +120,24 @@ def read_scanned_file(
     *,
     project_path: Path,
     scanned_file: ScannedFile,
+    max_source_bytes: int = (
+        DEFAULT_MAX_SOURCE_BYTES
+    ),
 ) -> FileReadResult:
     """
     Safely classify and read one discovered file.
 
     File symlinks are never followed for source content. Internal symlinks are
     classified as symlinks; symlinks resolving outside the project root are
-    classified separately as escaped symlinks.
+    classified separately as escaped symlinks. Oversized source files are
+    classified without loading their full content into memory.
     """
+
+    max_source_bytes = (
+        _validate_max_source_bytes(
+            max_source_bytes
+        )
+    )
 
     project_root = (
         project_path
@@ -216,7 +251,7 @@ def read_scanned_file(
         )
 
     try:
-        data = resolved_path.read_bytes()
+        file_stat = resolved_path.stat()
     except OSError as error:
         return _result(
             scanned_file=scanned_file,
@@ -232,15 +267,104 @@ def read_scanned_file(
             ),
         )
 
-    size_bytes = len(
-        data
-    )
-
-    if b"\x00" in data[:2048]:
+    if not stat.S_ISREG(
+        file_stat.st_mode
+    ):
         return _result(
             scanned_file=scanned_file,
             status=(
-                FileReadStatus.BINARY
+                FileReadStatus.UNREADABLE
+            ),
+            resolved_path=resolved_path,
+            size_bytes=file_stat.st_size,
+            error_type="UnsupportedFileType",
+            error_message=(
+                "source path is not a regular file"
+            ),
+        )
+
+    try:
+        with resolved_path.open(
+            "rb"
+        ) as file_handle:
+            size_bytes = os.fstat(
+                file_handle.fileno()
+            ).st_size
+
+            sample_limit = min(
+                2048,
+                max_source_bytes + 1,
+            )
+
+            sample = file_handle.read(
+                sample_limit
+            )
+
+            if b"\x00" in sample:
+                return _result(
+                    scanned_file=scanned_file,
+                    status=(
+                        FileReadStatus.BINARY
+                    ),
+                    resolved_path=resolved_path,
+                    size_bytes=size_bytes,
+                )
+
+            if size_bytes > max_source_bytes:
+                return _result(
+                    scanned_file=scanned_file,
+                    status=(
+                        FileReadStatus.OVERSIZED
+                    ),
+                    resolved_path=resolved_path,
+                    size_bytes=size_bytes,
+                )
+
+            remaining_limit = (
+                max_source_bytes
+                + 1
+                - len(sample)
+            )
+
+            remainder = file_handle.read(
+                remaining_limit
+            )
+
+            data = sample + remainder
+
+            observed_size = os.fstat(
+                file_handle.fileno()
+            ).st_size
+
+    except OSError as error:
+        return _result(
+            scanned_file=scanned_file,
+            status=(
+                FileReadStatus.UNREADABLE
+            ),
+            resolved_path=resolved_path,
+            error_type=type(
+                error
+            ).__name__,
+            error_message=str(
+                error
+            ),
+        )
+
+    size_bytes = max(
+        size_bytes,
+        observed_size,
+        len(data),
+    )
+
+    if (
+        len(data) > max_source_bytes
+        or observed_size > max_source_bytes
+    ):
+        return _result(
+            scanned_file=scanned_file,
+            status=(
+                FileReadStatus.OVERSIZED
             ),
             resolved_path=resolved_path,
             size_bytes=size_bytes,
@@ -264,11 +388,18 @@ def read_scanned_file(
 
 def read_manifest_files(
     manifest: ScanManifest,
+    *,
+    max_source_bytes: int = (
+        DEFAULT_MAX_SOURCE_BYTES
+    ),
 ) -> tuple[FileReadResult, ...]:
     return tuple(
         read_scanned_file(
             project_path=manifest.project_path,
             scanned_file=scanned_file,
+            max_source_bytes=(
+                max_source_bytes
+            ),
         )
         for scanned_file in manifest.files
     )

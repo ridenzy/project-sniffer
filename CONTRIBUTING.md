@@ -132,8 +132,9 @@ another independent project walk.
 
 Source-report consumers must not reopen target-project source files directly.
 Source text must pass through `project_sniffer.reading` so filesystem
-containment, file-symlink handling, binary classification, unreadable-file
-classification, and control-character cleaning remain centralized.
+containment, file-symlink handling, binary classification, oversized-file
+classification, non-regular-file refusal, unreadable-file classification, and
+control-character cleaning remain centralized.
 
 Target-project `.gitignore` handling also belongs to that shared discovery
 layer. Do not implement separate ignore walks inside individual analyzers.
