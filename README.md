@@ -74,6 +74,19 @@ The existing implementation can:
 - clean unsafe control characters;
 - generate Markdown fences that do not collide with source backticks;
 - report added and skipped file counts.
+- attach deterministic `SourceLanguage` metadata to safe-read source evidence;
+- recognize a broad registry of general-purpose, scripting, database,
+  infrastructure, web, hardware, shader, smart-contract, configuration, and
+  documentation languages from conservative path evidence;
+- preserve ambiguous source extensions as `UNKNOWN` rather than guessing;
+
+## Language recognition
+
+Current language-recognition coverage is documented in
+`docs/public/language-support.md`.
+
+Language recognition is not parser support. Parser capabilities will be tracked
+separately as parser implementations are introduced.
 
 ## Project Sniffer 1.0 scope
 

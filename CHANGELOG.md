@@ -39,6 +39,14 @@ The project is still in pre-1.0 development.
   root-level `docs/public/**` content into the project-specific output tree.
 - Byte-preserving public-documentation export that reuses the shared
   `ScanManifest` rather than introducing a second project walk.
+- Shared `SourceEvidence` metadata layered on the existing immutable safe-read
+  results without reopening target-project files.
+- Deterministic source-language classification for source-report presentation
+  and future parser routing.
+- Canonical broad language-recognition registry covering general-purpose,
+  scripting, web, database, infrastructure, schema, hardware, shader,
+  smart-contract, configuration, and documentation source types.
+- Maintained `docs/public/language-support.md` capability documentation.
 
 ### Removed
 

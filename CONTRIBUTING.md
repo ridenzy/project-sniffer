@@ -52,6 +52,20 @@ source-report, and public-documentation-export behavior belongs under
 `src/project_sniffer/`. Do not recreate parallel root-level implementations
 of packaged runtime modules.
 
+Language recognition and parser support are separate contracts.
+
+`SourceLanguage` and `project_sniffer.evidence.language_registry` describe what
+Project Sniffer can represent and recognize deterministically. They must not be
+used as evidence that a semantic parser exists.
+
+When adding or removing a registered language, suffix, basename, or ambiguity
+rule:
+
+1. update the language registry;
+2. update or add focused classifier tests;
+3. keep `docs/public/language-support.md` synchronized;
+4. do not assign ambiguous suffixes without stronger deterministic evidence.
+
 ## Private and generated material
 
 Do not commit:

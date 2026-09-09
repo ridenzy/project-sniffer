@@ -3,6 +3,10 @@ from __future__ import annotations
 from collections.abc import Sequence
 from pathlib import Path
 
+from project_sniffer.evidence import (
+    SourceEvidence,
+    SourceLanguage,
+)
 from project_sniffer.reading import (
     FileReadResult,
     FileReadStatus,
@@ -46,6 +50,7 @@ def add_text_safely(
     report_sections: list[str],
     relative_path: str,
     content: str,
+    language: SourceLanguage,
 ) -> None:
     """
     Add already-read text content to the Markdown report safely.
@@ -76,7 +81,8 @@ def add_text_safely(
     )
 
     report_sections.append(
-        f"{markdown_fence}text\n"
+        f"{markdown_fence}"
+        f"{language.markdown_fence_label}\n"
     )
 
     for index in range(
@@ -120,15 +126,16 @@ def _unreadable_detail(
 
 def build_report(
     project_path: str | Path,
-    read_results: Sequence[FileReadResult],
+    source_evidence: Sequence[SourceEvidence],
     output_path: str | Path = OUTPUT_PATH,
 ) -> None:
     """
-    Generate a Markdown source report from safe-reader results.
+    Generate a Markdown source report from shared source evidence.
 
     Ignore handling belongs to the shared discovery manifest. Target-project
-    content is never opened here: this function only renders FileReadResult
-    evidence and writes the generated Project Sniffer report.
+    content is never opened here: this function renders existing FileReadResult
+    evidence plus deterministic language metadata and writes the generated
+    Project Sniffer report.
     """
 
     project_root = (
@@ -170,7 +177,9 @@ def build_report(
         FileReadStatus.PATH_MISMATCH,
     }
 
-    for result in read_results:
+    for evidence in source_evidence:
+        result = evidence.read_result
+
         relative_path = (
             result
             .scanned_file
@@ -288,6 +297,7 @@ def build_report(
                 report_sections,
                 relative_path,
                 content,
+                evidence.language,
             )
 
             added_files += 1

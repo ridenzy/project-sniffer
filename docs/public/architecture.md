@@ -20,6 +20,7 @@ sniff
              +-- project_sniffer.config
              +-- project_sniffer.scanning
              +-- project_sniffer.reading
+             +-- project_sniffer.evidence
              +-- project_sniffer.architecture_builder
              +-- project_sniffer.report_builder
              +-- project_sniffer.docs_exporter
@@ -107,13 +108,19 @@ Canonical ScanManifest
     |
     +-- safe file reading
     |       |
-    |       +-- language parsers and detectors
+    |       +-- immutable FileReadResult
     |               |
-    |               +-- shared project indexes
+    |               +-- SourceEvidence
     |                       |
-    |                       +-- requested analyzers
+    |                       +-- language classifier
     |                               |
-    |                               +-- Markdown and JSON reporting
+    |                               +-- language registry
+    |                                       |
+    |                                       +-- future parser registry
+    |                                               |
+    |                                               +-- shared project indexes
+    |                                                       |
+    |                                                       +-- requested analyzers
     |
     +-- --docs raw-byte export
             |
@@ -139,6 +146,27 @@ may copy binary documentation. Instead, `project_sniffer.docs_exporter`
 filters the existing manifest to root-level `docs/public/**`, validates
 source and destination containment, refuses source and destination symlink
 hazards, requires regular source files, and performs streamed atomic copies.
+
+## Source evidence and language recognition
+
+Readable source files retain their existing immutable `FileReadResult` evidence.
+
+`project_sniffer.evidence` adds semantic metadata around that object rather than
+duplicating source content or reopening files.
+
+`SourceLanguage` represents language identity only. Recognition does not imply
+that a parser exists.
+
+Path-recognition rules are owned by
+`project_sniffer.evidence.language_registry`. The registry records deterministic
+suffixes, special basenames, broad language categories, and intentionally
+unresolved ambiguous cases.
+
+Compound suffixes are evaluated longest-first. Exact case-sensitive suffix
+rules are evaluated before case-insensitive rules where the distinction is
+meaningful.
+
+See `language-support.md` for the current registry.
 
 ## Core safety model
 

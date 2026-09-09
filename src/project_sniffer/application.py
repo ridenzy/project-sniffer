@@ -14,6 +14,9 @@ from project_sniffer.docs_exporter import (
     DocsExportError,
     export_public_docs,
 )
+from project_sniffer.evidence import (
+    build_source_evidence,
+)
 from project_sniffer.reading import (
     read_manifest_files,
 )
@@ -276,9 +279,15 @@ def run_analysis(
                 manifest
             )
 
+            source_evidence = (
+                build_source_evidence(
+                    read_results
+                )
+            )
+
             build_report(
                 project_path=project_path,
-                read_results=read_results,
+                source_evidence=source_evidence,
                 output_path=report_output,
             )
         except OSError as error:
