@@ -25,7 +25,10 @@ class ProjectSnifferCliTests(
             "--project",
             "--architecture",
             "--report",
+            "--docs",
             "--output",
+            "implemented analyzers",
+            "output capabilities",
             (
                 "sniff --project ./frontend "
                 "--architecture"
@@ -42,7 +45,7 @@ class ProjectSnifferCliTests(
                     help_text,
                 )
 
-        self.assertIn(
+        self.assertNotIn(
             "Implemented analyzers currently available:",
             help_text,
         )

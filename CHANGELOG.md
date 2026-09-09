@@ -35,6 +35,10 @@ The project is still in pre-1.0 development.
 - Maintained public architecture documentation.
 - Maintained configuration and ignore-rule documentation.
 - Expanded repository-local Git ignore protection.
+- `--docs` as a separate output capability for copying manifest-approved
+  root-level `docs/public/**` content into the project-specific output tree.
+- Byte-preserving public-documentation export that reuses the shared
+  `ScanManifest` rather than introducing a second project walk.
 
 ### Removed
 
@@ -55,3 +59,5 @@ The project is still in pre-1.0 development.
   outside-project, or manifest/path-mismatch source paths before reading content.
 - Oversized source files are skipped without loading their full content, and
   non-regular filesystem entries are refused before source content is opened.
+- Public-documentation export rejects source and destination symlink hazards,
+  path escapes, and non-regular sources before replacing destination files.

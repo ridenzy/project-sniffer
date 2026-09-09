@@ -20,14 +20,11 @@ target-project code.
 """
 
 _EPILOG = """\
-Implemented analyzers currently available:
-  --architecture    Generate the current project-tree architecture report.
-  --report          Generate the current readable Markdown source report.
-
 Examples:
   sniff --project ./frontend --architecture
   sniff --project ./frontend --report
-  sniff --project ./frontend --architecture --report
+  sniff --project ./frontend --docs
+  sniff --project ./frontend --architecture --report --docs
   sniff --project ./frontend --architecture --output ./analysis
 
 Still planned for later phases:
@@ -124,6 +121,22 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    outputs = (
+        parser.add_argument_group(
+            "output capabilities"
+        )
+    )
+
+    outputs.add_argument(
+        "--docs",
+        action="store_true",
+        help=(
+            "Copy manifest-approved root-level "
+            "docs/public files into the generated "
+            "project output directory."
+        ),
+    )
+
     parser.add_argument(
         "--output",
         metavar="PATH",
@@ -148,13 +161,14 @@ def main(
         argv
     )
 
-    requested_analyzer = (
+    requested_operation = (
         args.architecture
         or args.report
+        or args.docs
     )
 
     if (
-        not requested_analyzer
+        not requested_operation
         and args.project is None
         and args.output is None
     ):
@@ -164,13 +178,14 @@ def main(
     if args.project is None:
         parser.error(
             "--project is required when "
-            "running an analyzer"
+            "running an operation"
         )
 
-    if not requested_analyzer:
+    if not requested_operation:
         parser.error(
             "select at least one implemented "
-            "analyzer: --architecture or --report"
+            "operation: --architecture, --report, "
+            "or --docs"
         )
 
     return run_analysis(
@@ -179,6 +194,7 @@ def main(
             args.architecture
         ),
         report_requested=args.report,
+        docs_requested=args.docs,
         output_value=args.output,
         working_directory=Path.cwd(),
     )

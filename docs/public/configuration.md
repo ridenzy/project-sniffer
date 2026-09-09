@@ -147,6 +147,22 @@ machines.
 Project Sniffer recommended and personal exclusions remain stronger than
 target `.gitignore` rules.
 
+## Effect on `--docs`
+
+`--docs` is not an ignore override. It copies only root-level
+`docs/public/**` files that already survived configuration rules, active
+output-directory exclusion, and the target project's `.gitignore` hierarchy
+into the canonical `ScanManifest`.
+
+For example, a personal `IGNORE_FOLDERS` rule of `docs` removes the entire
+`docs/` subtree before `--docs` runs. A narrower `docs/public/internal`
+rule removes only that subtree. The exporter does not perform a fallback
+filesystem walk to recover excluded documentation.
+
+`docs/private/**` is never selected for documentation export because
+`--docs` only accepts manifest paths beginning with root-level
+`docs/public/`.
+
 ## Planned project-owned configuration
 
 A target project may later provide:

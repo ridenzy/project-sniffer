@@ -10,6 +10,10 @@ from project_sniffer.config import (
     ConfigurationError,
     load_ignore_config,
 )
+from project_sniffer.docs_exporter import (
+    DocsExportError,
+    export_public_docs,
+)
 from project_sniffer.reading import (
     read_manifest_files,
 )
@@ -96,10 +100,11 @@ def run_analysis(
     project_value: str,
     architecture_requested: bool,
     report_requested: bool,
+    docs_requested: bool,
     output_value: str | None,
     working_directory: Path,
 ) -> int:
-    """Run the migrated architecture/report analysis slice."""
+    """Run the implemented analysis and documentation-output operations."""
 
     project_path = resolve_project_path(
         project_value
@@ -288,6 +293,59 @@ def run_analysis(
             "Project report written to: "
             f"{report_output}"
         )
+
+    if docs_requested:
+        docs_output = (
+            output_directory
+            / "docs"
+            / "public"
+        )
+
+        print(
+            "\nCopying public documentation..."
+        )
+
+        try:
+            docs_summary = export_public_docs(
+                manifest=manifest,
+                output_directory=output_directory,
+            )
+        except DocsExportError as error:
+            print(
+                "Error: documentation export: "
+                f"{error}",
+                file=sys.stderr,
+            )
+            return OUTPUT_ERROR
+
+        print("Documentation copy summary:")
+        print(
+            f"  Copied files: "
+            f"{docs_summary.copied_files}"
+        )
+        print(
+            "  Skipped symlink files: "
+            f"{docs_summary.skipped_symlink_files}"
+        )
+        print(
+            "  Skipped unsafe-path files: "
+            f"{docs_summary.skipped_unsafe_files}"
+        )
+        print(
+            "  Skipped unreadable files: "
+            f"{docs_summary.skipped_unreadable_files}"
+        )
+
+        if docs_summary.copied_files:
+            print(
+                "Documentation copied to: "
+                f"{docs_output}"
+            )
+        else:
+            print(
+                "Documentation copy found no "
+                "manifest-approved docs/public files."
+            )
 
     print(
         "\nDone."

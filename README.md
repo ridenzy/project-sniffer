@@ -12,21 +12,33 @@ developers, reviewers, and supervised AI-assisted engineering workflows.
 Project Sniffer now has an installable development package with the first
 working analyzers.
 
-Implemented commands include:
+Implemented operations include:
 
 ```bash
 sniff --project /path/to/project --architecture
 sniff --project /path/to/project --report
-sniff --project /path/to/project --architecture --report
+sniff --project /path/to/project --docs
+sniff --project /path/to/project --architecture --report --docs
 ```
+
+`--architecture` and `--report` are analyzers. `--docs` is an output
+capability that copies manifest-approved root-level `docs/public/**`
+content alongside generated Project Sniffer evidence.
 
 Default output is grouped by scanned project:
 
 ```text
 reports/<project-name>/
 ├── <project-name>-architecture.md
-└── <project-name>-project-report.md
+├── <project-name>-project-report.md
+└── docs/
+    └── public/
+        └── ...
 ```
+
+The `docs/public/` snapshot is created only when `--docs` is selected and
+manifest-approved public documentation exists. Relative paths below
+`docs/public/` are preserved.
 
 `--output PATH` overrides the base output directory while preserving the
 project-specific subdirectory:
@@ -36,7 +48,9 @@ PATH/<project-name>/<files>
 ```
 
 The root-level `main.py` remains available as a positional compatibility entry
-point and now delegates to the same packaged runtime used by `sniff`.
+point and delegates to the packaged runtime used by `sniff`. It preserves the
+original architecture-plus-report behavior; `--docs` is selected explicitly
+through the installed CLI.
 
 ## Current capabilities
 
@@ -48,6 +62,8 @@ The existing implementation can:
 - exclude the active Project Sniffer output directory from repeat scans;
 - generate a project tree;
 - generate a readable Markdown source report;
+- copy manifest-approved root-level `docs/public/**` files byte-for-byte while
+  preserving their relative documentation structure;
 - read source-report files through a shared safe-reader evidence boundary;
 - refuse to follow discovered file symlinks for source content;
 - distinguish escaped symlinks and reject paths outside the resolved project root;
@@ -81,6 +97,11 @@ The stable 1.0 command is planned to support five analyzers:
 ```
 
 `--all` will run all stable static analyzers.
+
+`--docs` is intentionally separate from that analyzer set. It exports
+maintained documentation that already survived the shared scan and ignore
+policy; it does not perform a second project walk and does not override
+recommended, personal, output-directory, or target `.gitignore` exclusions.
 
 A deterministic `--impact` analyzer is planned after 1.0.
 

@@ -28,8 +28,12 @@ The current packaged CLI supports:
 ```bash
 sniff --project /path/to/project --architecture
 sniff --project /path/to/project --report
-sniff --project /path/to/project --architecture --report
+sniff --project /path/to/project --docs
+sniff --project /path/to/project --architecture --report --docs
 ```
+
+`--architecture` and `--report` are analyzers. `--docs` is an output
+capability and must remain separate from the stable analyzer set.
 
 Reports are grouped by scanned project:
 
@@ -43,9 +47,10 @@ project-specific subdirectory.
 The root-level `main.py` remains available as a positional compatibility entry
 point and delegates to the packaged runtime.
 
-Authoritative scanner, configuration, safe-reading, architecture, and
-source-report behavior belongs under `src/project_sniffer/`. Do not recreate
-parallel root-level implementations of packaged runtime modules.
+Authoritative scanner, configuration, safe-reading, architecture,
+source-report, and public-documentation-export behavior belongs under
+`src/project_sniffer/`. Do not recreate parallel root-level implementations
+of packaged runtime modules.
 
 ## Private and generated material
 
@@ -100,19 +105,27 @@ python3 -m unittest discover -s tests -p 'test_*.py' -v
 git diff --check
 ```
 
-Changes that affect scanning or report generation should also be exercised
-against a synthetic disposable project rather than against private production
-repositories.
+Changes that affect scanning, report generation, or documentation export
+should also be exercised against a synthetic disposable project rather than
+against private production repositories.
 
-The packaged architecture and source-report analyzers share one scan manifest.
-New analyzer code must consume that shared evidence rather than introducing
-another independent project walk.
+The packaged architecture analyzer, source-report analyzer, and `--docs`
+output capability share one scan manifest. New analyzer or output code must
+consume that shared discovery evidence rather than introducing another
+independent project walk.
 
 Source-report consumers must not reopen target-project source files directly.
 Source text must pass through `project_sniffer.reading` so filesystem
 containment, file-symlink handling, binary classification, oversized-file
 classification, non-regular-file refusal, unreadable-file classification, and
 control-character cleaning remain centralized.
+
+`--docs` is different by design: documentation export preserves source bytes,
+including binary documentation, and therefore must not route copies through
+the text-decoding source-report reader. `project_sniffer.docs_exporter` must
+still consume only `ScanManifest` entries, preserve ignore-policy decisions,
+reject unsafe source or destination paths, refuse file symlinks, and preserve
+the relative structure below root-level `docs/public/`.
 
 Target-project `.gitignore` handling also belongs to that shared discovery
 layer. Do not implement separate ignore walks inside individual analyzers.

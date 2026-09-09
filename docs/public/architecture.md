@@ -22,9 +22,12 @@ sniff
              +-- project_sniffer.reading
              +-- project_sniffer.architecture_builder
              +-- project_sniffer.report_builder
+             +-- project_sniffer.docs_exporter
 ```
 
-The first packaged analyzers now support `--architecture` and `--report`.
+The packaged analyzers currently support `--architecture` and `--report`.
+`--docs` is additionally available as a separate output capability for
+copying manifest-approved root-level `docs/public/**` content.
 
 The package also contains its recommended ignore configuration as a packaged
 resource.
@@ -56,6 +59,7 @@ The package refactor must preserve:
 - safe Markdown fencing;
 - architecture-tree generation;
 - source-report generation;
+- manifest-approved byte-preserving `docs/public/**` export;
 - clear terminal summaries.
 
 ## Known limitations in the current implementation
@@ -97,19 +101,28 @@ Single project walk
     |
 Path classification and ignore policy
     |
-Safe file reading
+Canonical ScanManifest
     |
-Language parsers and detectors
+    +-- architecture builder
     |
-Shared project indexes
+    +-- safe file reading
+    |       |
+    |       +-- language parsers and detectors
+    |               |
+    |               +-- shared project indexes
+    |                       |
+    |                       +-- requested analyzers
+    |                               |
+    |                               +-- Markdown and JSON reporting
     |
-Requested analyzers
-    |
-Markdown and JSON reporting
+    +-- --docs raw-byte export
+            |
+            +-- generated docs/public snapshot
 ```
 
-Architecture and source-report generation now consume the same shared scan
-manifest and do not introduce separate filesystem discovery walks.
+Architecture generation, source-report generation, and `--docs` all consume
+the same shared scan manifest and do not introduce separate filesystem
+discovery walks.
 
 The source-report path passes discovered files through `project_sniffer.reading`
 before Markdown rendering. The reader returns immutable `FileReadResult`
@@ -119,6 +132,13 @@ Binary, oversized, unreadable, ordinary-symlink, and escaped-symlink outcomes
 are classified before `project_sniffer.report_builder` receives any source text.
 The reader applies an 8 MiB default per-file source-read ceiling and rejects
 non-regular filesystem entries before source content is opened.
+
+The documentation-export branch intentionally does not pass files through
+`project_sniffer.reading`: `--docs` preserves the original source bytes and
+may copy binary documentation. Instead, `project_sniffer.docs_exporter`
+filters the existing manifest to root-level `docs/public/**`, validates
+source and destination containment, refuses source and destination symlink
+hazards, requires regular source files, and performs streamed atomic copies.
 
 ## Core safety model
 

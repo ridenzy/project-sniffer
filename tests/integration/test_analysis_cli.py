@@ -415,6 +415,174 @@ class ProjectSnifferAnalysisCliTests(
             architecture_text,
         )
 
+    def test_docs_only_copies_manifest_approved_public_docs(
+        self,
+    ) -> None:
+        public_docs = (
+            self.project
+            / "docs"
+            / "public"
+        )
+
+        public_docs.mkdir(
+            parents=True
+        )
+
+        (
+            public_docs
+            / "guide.md"
+        ).write_text(
+            "public guide\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        assets = (
+            public_docs
+            / "assets"
+        )
+
+        assets.mkdir()
+
+        binary_payload = (
+            b"binary\x00documentation"
+        )
+
+        (
+            assets
+            / "diagram.bin"
+        ).write_bytes(
+            binary_payload
+        )
+
+        internal = (
+            public_docs
+            / "internal"
+        )
+
+        internal.mkdir()
+
+        (
+            internal
+            / "hidden.md"
+        ).write_text(
+            "hidden\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        private_docs = (
+            self.project
+            / "docs"
+            / "private"
+        )
+
+        private_docs.mkdir()
+
+        (
+            private_docs
+            / "notes.md"
+        ).write_text(
+            "private\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        (
+            self.project
+            / ".gitignore"
+        ).write_text(
+            "docs/private/\n"
+            "docs/public/internal/\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        output_base = (
+            self.workspace
+            / "docs-output"
+        )
+
+        status = main(
+            [
+                "--project",
+                str(
+                    self.project
+                ),
+                "--docs",
+                "--output",
+                str(
+                    output_base
+                ),
+            ]
+        )
+
+        self.assertEqual(
+            status,
+            0,
+        )
+
+        report_directory = (
+            output_base
+            / "fixture-project"
+        )
+
+        copied_docs = (
+            report_directory
+            / "docs"
+            / "public"
+        )
+
+        self.assertEqual(
+            (
+                copied_docs
+                / "guide.md"
+            ).read_text(
+                encoding="utf-8"
+            ),
+            "public guide\n",
+        )
+
+        self.assertEqual(
+            (
+                copied_docs
+                / "assets"
+                / "diagram.bin"
+            ).read_bytes(),
+            binary_payload,
+        )
+
+        self.assertFalse(
+            (
+                copied_docs
+                / "internal"
+                / "hidden.md"
+            ).exists()
+        )
+
+        self.assertFalse(
+            (
+                report_directory
+                / "docs"
+                / "private"
+                / "notes.md"
+            ).exists()
+        )
+
+        self.assertFalse(
+            (
+                report_directory
+                / "fixture-project-architecture.md"
+            ).exists()
+        )
+
+        self.assertFalse(
+            (
+                report_directory
+                / "fixture-project-project-report.md"
+            ).exists()
+        )
+
     def test_in_project_custom_output_is_excluded_on_repeat_scan(
         self,
     ) -> None:

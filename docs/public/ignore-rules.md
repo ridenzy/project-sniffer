@@ -111,18 +111,24 @@ This matches the documented Git behavior for excluded parent directories.
 
 ## Shared scan manifest
 
-Architecture and source-report generation continue to consume the same
-`ScanManifest`.
+Architecture generation, source-report generation, and `--docs` consume the
+same `ScanManifest`.
+
+`--docs` therefore cannot copy a `docs/public/**` file that was already
+removed by recommended rules, a matching personal profile, active output
+exclusion, or target `.gitignore` processing. It performs no second discovery
+walk and never inspects `docs/private/**` as an export source.
 
 `.gitignore` support does not introduce another filesystem discovery walk.
 
-## Generated report directories
+## Generated output directories
 
 Project Sniffer explicitly excludes the resolved project-specific output
 directory from the shared scan.
 
-This prevents generated reports from entering later scans when output is
-stored inside the target project.
+This prevents generated architecture reports, source reports, and copied
+`docs/public/**` snapshots from entering later scans when output is stored
+inside the target project.
 
 ## Personal configuration
 
