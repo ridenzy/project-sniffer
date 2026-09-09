@@ -47,6 +47,8 @@ The project is still in pre-1.0 development.
   scripting, web, database, infrastructure, schema, hardware, shader,
   smart-contract, configuration, and documentation source types.
 - Maintained `docs/public/language-support.md` capability documentation.
+- Initial semantic parser registry and dispatcher for supported source languages.
+- Python semantic parsing through the standard-library `ast` module, producing normalized import and class/function symbol evidence without executing target code.
 
 ### Removed
 

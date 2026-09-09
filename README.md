@@ -79,14 +79,22 @@ The existing implementation can:
   infrastructure, web, hardware, shader, smart-contract, configuration, and
   documentation languages from conservative path evidence;
 - preserve ambiguous source extensions as `UNKNOWN` rather than guessing;
+- route readable source evidence through a semantic parser registry without reopening target-project files;
+- parse Python source with the standard-library `ast` module into normalized imports and class, function, and async-function symbol evidence;
+- represent unsupported languages, non-text evidence, invalid text evidence, and Python syntax failures through explicit parse statuses;
 
 ## Language recognition
 
 Current language-recognition coverage is documented in
 `docs/public/language-support.md`.
 
-Language recognition is not parser support. Parser capabilities will be tracked
-separately as parser implementations are introduced.
+Language recognition is not parser support. Parser capability is tracked
+separately from recognition.
+
+Python currently has a semantic parser identified as `python-stdlib-ast`. It
+uses Python's standard-library AST without importing or executing target
+modules. Other registered languages remain recognition-only until a parser
+is implemented for them.
 
 ## Project Sniffer 1.0 scope
 

@@ -21,6 +21,7 @@ sniff
              +-- project_sniffer.scanning
              +-- project_sniffer.reading
              +-- project_sniffer.evidence
+             +-- project_sniffer.parsing
              +-- project_sniffer.architecture_builder
              +-- project_sniffer.report_builder
              +-- project_sniffer.docs_exporter
@@ -116,9 +117,11 @@ Canonical ScanManifest
     |                               |
     |                               +-- language registry
     |                                       |
-    |                                       +-- future parser registry
+    |                                       +-- parser registry
     |                                               |
-    |                                               +-- shared project indexes
+    |                                               +-- Python stdlib AST parser
+    |                                                       |
+    |                                                       +-- shared project indexes
     |                                                       |
     |                                                       +-- requested analyzers
     |
@@ -167,6 +170,18 @@ rules are evaluated before case-insensitive rules where the distinction is
 meaningful.
 
 See `language-support.md` for the current registry.
+
+## Semantic parsing
+
+`project_sniffer.parsing` consumes existing `SourceEvidence`; it does not
+perform filesystem discovery or reopen target-project files.
+
+The parser registry currently supports Python through the standard-library
+`ast` parser identified as `python-stdlib-ast`. The parser normalizes import
+statements and class, function, and async-function symbols. Unsupported
+languages and non-text or invalid evidence remain explicit parse outcomes.
+Syntax errors are recorded as parser evidence rather than causing target code
+to execute or the scan pipeline to fail.
 
 ## Core safety model
 

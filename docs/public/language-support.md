@@ -16,7 +16,8 @@ The capability levels are:
 3. **Parsed** — a real parser can produce normalized semantic evidence.
 4. **Analyzer-supported** — analyzers consume that parsed evidence.
 
-Phase 2F-A implements levels 1 and 2. Parser capability begins in Phase 2F-B.
+Phase 2F-A implements levels 1 and 2. Phase 2F-B now provides level 3 for
+Python while the remaining registered languages are still recognition-only.
 
 ## Recognition policy
 
@@ -140,11 +141,16 @@ separate future concern.
 
 ## Parser support
 
-No language in this table should currently be interpreted as having a
-completed semantic parser merely because its path is recognized.
+Parser support is tracked separately from path recognition.
 
-Phase 2F-B will introduce a separate parser-capability registry. At that
-point this document will show parser status independently from recognition.
+| Registry ID | Parser ID | Status | Normalized evidence |
+| --- | --- | --- | --- |
+| `python` | `python-stdlib-ast` | Parsed | imports; classes; functions; async functions |
+
+All other registered languages currently remain recognition-only. Python
+parsing uses the standard-library AST and does not import or execute target
+modules. Analyzer support remains a separate capability level; `--trace`
+has not yet been wired to consume this parser evidence.
 
 ## Future detection layers
 
