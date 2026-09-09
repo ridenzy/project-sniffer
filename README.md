@@ -92,6 +92,12 @@ The existing implementation can:
   than misclassifying them as confirmed external or internal dependencies;
 - recognize the conventional top-level `src/` Python source-root layout during
   internal module resolution;
+- build an immutable project dependency graph from confirmed internal Python
+  import resolutions;
+- preserve every import-resolution outcome while creating dependency edges only
+  for relationships supported by deterministic internal evidence;
+- retain source path, target path, source line, and enclosing scope on import
+  dependency edges;
 
 ## Language recognition
 

@@ -55,6 +55,10 @@ The project is still in pre-1.0 development.
   unresolved, ambiguous, and invalid-relative-import outcomes.
 - Conventional top-level `src/` source-root handling for initial Python module
   resolution without importing or executing target-project modules.
+- Immutable dependency-graph evidence derived from confirmed internal Python
+  import resolutions while retaining unresolved and ambiguous import evidence.
+- Source-file, line, and enclosing-scope provenance on confirmed import
+  dependency edges.
 
 ### Removed
 

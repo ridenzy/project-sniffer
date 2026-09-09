@@ -127,7 +127,9 @@ Canonical ScanManifest
     |                                                               |
     |                                                               +-- Python import resolution
     |                                                                       |
-    |                                                                       +-- requested analyzers
+    |                                                                       +-- DependencyGraph
+    |                                                                           |
+    |                                                                           +-- requested analyzers
     |
     +-- --docs raw-byte export
             |
@@ -226,6 +228,25 @@ discovery from packaging metadata remains future work.
 
 Import resolution is still evidence rather than the public `--trace` analyzer.
 Dependency graph construction and trace rendering remain later stages.
+
+## Dependency graph
+
+`project_sniffer.tracing.dependency_graph` converts confirmed internal import
+resolutions into immutable dependency edges.
+
+Every parsed source path remains represented as a graph node, including files
+that have no dependency edges. The graph also retains the complete import
+resolution collection so unresolved, ambiguous, and invalid relative imports
+remain visible evidence.
+
+Only `RESOLVED_INTERNAL` imports become dependency edges. Unresolved,
+ambiguous, or invalid imports never become inferred relationships.
+
+Each import dependency edge retains its source path, target path, source line,
+enclosing parser scope, and original `ImportResolution` evidence.
+
+The dependency graph is still an internal semantic-analysis layer. Trace
+rendering and the public `--trace` analyzer remain separate later stages.
 
 ## Core safety model
 
