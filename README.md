@@ -107,21 +107,23 @@ before the stable `--secret` analyzer.
 
 ## Configuration direction
 
-Project Sniffer will distinguish between:
+The current development runtime distinguishes between:
 
 - built-in recommended ignores;
-- machine-local per-project preferences;
-- project-owned `.project-sniffer.toml` configuration.
+- one local private schema-version-1 per-project registry;
+- target-project `.gitignore` rules.
 
-The installed CLI now resolves machine-local personal ignores independently of
-the invocation directory and supports both the legacy global JSON format and
-schema-version-1 per-project profiles.
+The local private registry is
+`src/project_sniffer/resources/personal_ignores.json`.
 
-See:
+It is Git-ignored, excluded from package data, and read-only from Project
+Sniffer's perspective. The legacy global JSON shape and the former
+XDG/APPDATA personal-registry locations are no longer accepted by the current
+runtime.
 
-- `docs/public/architecture.md`
-- `docs/public/configuration.md`
-- `docs/public/ignore-rules.md`
+Target-project `.project-sniffer.toml`, explicit `--config`, and a final
+installed-user personal-configuration location remain planned rather than
+implemented.
 
 ## Contributing
 

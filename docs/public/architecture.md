@@ -18,7 +18,7 @@ sniff
        +-- project_sniffer.application
              |
              +-- project_sniffer.config
-             +-- project_sniffer.scanner
+             +-- project_sniffer.scanning
              +-- project_sniffer.reading
              +-- project_sniffer.architecture_builder
              +-- project_sniffer.report_builder
@@ -28,6 +28,11 @@ The first packaged analyzers now support `--architecture` and `--report`.
 
 The package also contains its recommended ignore configuration as a packaged
 resource.
+
+The current source-tree development runtime may additionally read the local
+private schema-version-1 registry at
+`src/project_sniffer/resources/personal_ignores.json`. That file is
+Git-ignored and excluded from package data.
 
 The root-level `main.py` remains available as a positional compatibility entry
 point and delegates to `project_sniffer.application`.
@@ -59,7 +64,9 @@ The current code still has several deliberate migration targets:
 
 1. Target-project `.project-sniffer.toml` and explicit `--config` are not
    implemented yet.
-2. Non-overridable secret-bearing exclusions are not implemented yet.
+2. A final installed-user personal-configuration location is not implemented
+   yet; the current private registry is source-tree local.
+3. Non-overridable secret-bearing exclusions are not implemented yet.
 
 ## Target 1.0 analyzer surface
 
@@ -128,12 +135,14 @@ The 1.0 core must:
 
 ## Configuration ownership
 
-Three configuration classes are planned:
+The current and planned configuration classes are:
 
 1. Built-in defaults and recommended ignores.
-2. Machine-local user preferences, including per-project private ignores.
+2. Local private per-project preferences for the current source-tree runtime.
 3. Target-project `.project-sniffer.toml` configuration.
+4. A future installed-user personal-configuration location.
 
-The machine-local personal registry is intentionally not committed to Git.
+The current private registry is intentionally not committed to Git or included
+as package data.
 
 See `configuration.md`.

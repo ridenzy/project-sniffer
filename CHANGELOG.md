@@ -16,10 +16,9 @@ The project is still in pre-1.0 development.
 - Migrated architecture and Markdown source-report execution behind the installed `sniff` command.
 - Correct relative project-path resolution for the packaged CLI.
 - Project-grouped report directories for default and custom output bases.
-- Packaged recommended-ignore resources and a non-creating legacy personal-ignore loader.
-- Deterministic machine-local personal-ignore registry resolution.
+- Packaged recommended-ignore resources and a non-creating personal-ignore loader.
+- Source-tree-local private personal-ignore registry resolution for the current development runtime.
 - Schema-version-1 per-project personal ignore profiles with root-name and root-path matching.
-- Backward-compatible support for the legacy global personal-ignore shape during the 0.x migration.
 - Shared single-walk scan manifest for the packaged architecture and source-report analyzers.
 - Exact and shell-style basename glob matching for current ignore folder and file rules.
 - Automatic exclusion of the active project-specific report directory from repeat scans.
@@ -44,6 +43,8 @@ The project is still in pre-1.0 development.
   convergence.
 - Legacy `requirements.txt` containing unused DOCX-era dependencies; package
   dependencies are defined by `pyproject.toml`.
+- Legacy global personal-ignore JSON support and XDG/APPDATA personal-registry resolution.
+- Redundant `project_sniffer.scanner` re-export shim after application imports moved directly to `project_sniffer.scanning`.
 
 ### Security
 

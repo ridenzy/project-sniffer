@@ -9,6 +9,7 @@ from contextlib import (
     redirect_stdout,
 )
 from pathlib import Path
+from unittest.mock import patch
 
 from project_sniffer.cli import main
 
@@ -29,28 +30,21 @@ class ProjectSnifferAnalysisCliTests(
             self.temporary_directory.name
         )
 
-        self.original_xdg_config_home = (
-            os.environ.get(
-                "XDG_CONFIG_HOME"
-            )
-        )
-
-        self.config_home = (
-            self.workspace
-            / "config-home"
-        )
-
         self.personal_registry_path = (
-            self.config_home
-            / "project-sniffer"
+            self.workspace
+            / "private-config"
             / "personal_ignores.json"
         )
 
-        os.environ[
-            "XDG_CONFIG_HOME"
-        ] = str(
-            self.config_home
+        self.personal_registry_patcher = patch(
+            (
+                "project_sniffer.config.loader."
+                "get_personal_registry_path"
+            ),
+            return_value=self.personal_registry_path,
         )
+
+        self.personal_registry_patcher.start()
 
         os.chdir(
             self.workspace
@@ -94,19 +88,7 @@ class ProjectSnifferAnalysisCliTests(
     def tearDown(
         self,
     ) -> None:
-        if (
-            self.original_xdg_config_home
-            is None
-        ):
-            os.environ.pop(
-                "XDG_CONFIG_HOME",
-                None,
-            )
-
-        else:
-            os.environ[
-                "XDG_CONFIG_HOME"
-            ] = self.original_xdg_config_home
+        self.personal_registry_patcher.stop()
 
         os.chdir(
             self.original_cwd
@@ -292,13 +274,8 @@ class ProjectSnifferAnalysisCliTests(
     def test_personal_ignore_file_is_not_auto_created(
         self,
     ) -> None:
-        personal_path = (
-            self.workspace
-            / "personal_ignores.json"
-        )
-
         self.assertFalse(
-            personal_path.exists()
+            self.personal_registry_path.exists()
         )
 
         status = main(
@@ -317,10 +294,10 @@ class ProjectSnifferAnalysisCliTests(
         )
 
         self.assertFalse(
-            personal_path.exists()
+            self.personal_registry_path.exists()
         )
 
-    def test_existing_legacy_personal_ignore_is_used(
+    def test_existing_project_profile_personal_ignore_is_used(
         self,
     ) -> None:
         self.personal_registry_path.parent.mkdir(
@@ -329,8 +306,13 @@ class ProjectSnifferAnalysisCliTests(
 
         self.personal_registry_path.write_text(
             "{\n"
-            '    "IGNORE_FOLDERS": ["src"],\n'
-            '    "IGNORE_FILES": []\n'
+            '    "schema_version": 1,\n'
+            '    "projects": {\n'
+            '        "fixture-project": {\n'
+            '            "IGNORE_FOLDERS": ["src"],\n'
+            '            "IGNORE_FILES": []\n'
+            "        }\n"
+            "    }\n"
             "}\n",
             encoding="utf-8",
             newline="\n",

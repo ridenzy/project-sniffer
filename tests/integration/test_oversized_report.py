@@ -6,6 +6,7 @@ import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
+from unittest.mock import patch
 
 from project_sniffer.cli import main
 from project_sniffer.reading import (
@@ -17,12 +18,6 @@ class OversizedReportIntegrationTests(unittest.TestCase):
     def setUp(self) -> None:
         self.original_cwd = Path.cwd()
 
-        self.original_xdg_config_home = (
-            os.environ.get(
-                "XDG_CONFIG_HOME"
-            )
-        )
-
         self.temporary_directory = (
             tempfile.TemporaryDirectory()
         )
@@ -31,16 +26,21 @@ class OversizedReportIntegrationTests(unittest.TestCase):
             self.temporary_directory.name
         )
 
-        self.config_home = (
+        self.personal_registry_path = (
             self.workspace
-            / "config-home"
+            / "private-config"
+            / "personal_ignores.json"
         )
 
-        os.environ[
-            "XDG_CONFIG_HOME"
-        ] = str(
-            self.config_home
+        self.personal_registry_patcher = patch(
+            (
+                "project_sniffer.config.loader."
+                "get_personal_registry_path"
+            ),
+            return_value=self.personal_registry_path,
         )
+
+        self.personal_registry_patcher.start()
 
         os.chdir(
             self.workspace
@@ -69,18 +69,7 @@ class OversizedReportIntegrationTests(unittest.TestCase):
         )
 
     def tearDown(self) -> None:
-        if (
-            self.original_xdg_config_home
-            is None
-        ):
-            os.environ.pop(
-                "XDG_CONFIG_HOME",
-                None,
-            )
-        else:
-            os.environ[
-                "XDG_CONFIG_HOME"
-            ] = self.original_xdg_config_home
+        self.personal_registry_patcher.stop()
 
         os.chdir(
             self.original_cwd

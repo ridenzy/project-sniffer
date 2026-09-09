@@ -46,5 +46,5 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 project_sniffer = [
-    "resources/*.json",
+    "resources/recommended_ignores.json",
 ]

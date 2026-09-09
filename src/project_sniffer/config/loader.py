@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 from importlib.resources import files
 from pathlib import Path
 from typing import Any
@@ -11,10 +10,6 @@ IgnoreConfig = dict[str, list[str]]
 
 _PERSONAL_REGISTRY_FILENAME = "personal_ignores.json"
 _SUPPORTED_SCHEMA_VERSION = 1
-_LEGACY_KEYS = {
-    "IGNORE_FOLDERS",
-    "IGNORE_FILES",
-}
 _PROFILE_KEYS = {
     "ROOT_NAME",
     "ROOT_PATH",
@@ -101,47 +96,18 @@ def _read_json_file(
 
 def get_personal_registry_path() -> Path:
     """
-    Return the deterministic machine-local personal-registry path.
+    Return the local private personal-registry path.
 
-    Windows uses APPDATA when available.
-
-    Other platforms use XDG_CONFIG_HOME when available and otherwise
-    ~/.config.
+    The registry lives beside Project Sniffer's package resources but is not
+    distributed as package data and must remain untracked.
     """
 
-    if os.name == "nt":
-        appdata = os.environ.get(
-            "APPDATA"
-        )
-
-        if appdata:
-            return (
-                Path(
-                    appdata
-                )
-                .expanduser()
-                / "project-sniffer"
-                / _PERSONAL_REGISTRY_FILENAME
-            )
-
-    xdg_config_home = os.environ.get(
-        "XDG_CONFIG_HOME"
-    )
-
-    if xdg_config_home:
-        return (
-            Path(
-                xdg_config_home
-            )
-            .expanduser()
-            / "project-sniffer"
-            / _PERSONAL_REGISTRY_FILENAME
-        )
-
     return (
-        Path.home()
-        / ".config"
-        / "project-sniffer"
+        Path(__file__)
+        .resolve()
+        .parent
+        .parent
+        / "resources"
         / _PERSONAL_REGISTRY_FILENAME
     )
 
@@ -441,12 +407,10 @@ def load_personal_ignores(
     registry_path: Path | None = None,
 ) -> IgnoreConfig:
     """
-    Load personal ignores for one resolved target project.
+    Load schema-version-1 personal ignores for one resolved target project.
 
-    During the 0.x migration window both the old global ignore object
-    and the schema-version-1 per-project registry are supported.
-
-    This function never creates or modifies the registry.
+    The local private registry is read-only from Project Sniffer's perspective:
+    this function never creates or modifies it.
     """
 
     path = (
@@ -474,26 +438,9 @@ def load_personal_ignores(
         "schema_version" not in data
         and "projects" not in data
     ):
-        unexpected = sorted(
-            set(
-                data
-            )
-            - _LEGACY_KEYS
-        )
-
-        if unexpected:
-            raise ConfigurationError(
-                f"{path}: unsupported legacy keys: "
-                + ", ".join(
-                    unexpected
-                )
-            )
-
-        return _validate_ignore_config(
-            data,
-            str(
-                path
-            ),
+        raise ConfigurationError(
+            f"{path}: personal registry must use "
+            "schema-version-1 per-project format."
         )
 
     return _load_project_profile(
@@ -545,10 +492,10 @@ def load_ignore_config(
     """
     Build the effective ignore configuration for one target project.
 
-    Current Phase 1 behavior is additive:
+    Current behavior is additive:
 
         packaged recommended ignores
-        + matching machine-local personal ignores
+        + matching local private personal ignores
     """
 
     return merge_ignore_configs(

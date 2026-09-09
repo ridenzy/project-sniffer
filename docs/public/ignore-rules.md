@@ -126,15 +126,16 @@ stored inside the target project.
 
 ## Personal configuration
 
-The legacy filename:
+The current source-tree development runtime resolves its local private
+registry from
+`src/project_sniffer/resources/personal_ignores.json`.
 
-```text
-personal_ignores.json
-```
+The `personal_ignores.json` basename remains excluded by packaged recommended
+rules, so the private registry does not enter Project Sniffer's own scan
+manifest or source report.
 
-remains excluded by packaged recommended rules.
-
-Machine-local personal configuration belongs outside scanned repositories.
+Only schema-version-1 per-project profiles are accepted. The legacy global
+personal-ignore shape is rejected.
 
 ## Not implemented yet
 

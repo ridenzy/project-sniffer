@@ -2,78 +2,50 @@
 
 ## Current configuration model
 
-The installed CLI loads recommended ignore rules from the packaged resource:
+The installed CLI loads recommended ignore rules from the packaged resource
+`src/project_sniffer/resources/recommended_ignores.json`.
 
-```text
-src/project_sniffer/resources/recommended_ignores.json
-```
+For the current source-tree development runtime, the local private personal
+registry is resolved from
+`src/project_sniffer/resources/personal_ignores.json`.
 
-Machine-local personal ignore rules are resolved independently of the shell
-working directory.
+The personal registry is intentionally Git-ignored and excluded from package
+data. The loader reads it when present but never creates or modifies it.
 
-On Linux and other XDG-oriented environments, the personal registry is:
+The current runtime no longer resolves personal configuration through
+`XDG_CONFIG_HOME`, `APPDATA`, or `~/.config`.
 
-```text
-${XDG_CONFIG_HOME}/project-sniffer/personal_ignores.json
-```
+This source-tree-local location is a development-stage policy. A final
+installed-user personal-configuration location remains to be designed before
+1.0.
 
-when `XDG_CONFIG_HOME` is defined.
+## Required personal-registry format
 
-Otherwise the default is:
+Only schema version 1 is accepted.
 
-```text
-~/.config/project-sniffer/personal_ignores.json
-```
+Example:
 
-On Windows, `APPDATA` is used when available.
-
-The loader reads the personal registry but never creates or modifies it.
-
-## Legacy global personal-ignore format
-
-During the 0.x migration period the old format remains supported:
-
-```json
-{
-    "IGNORE_FOLDERS": [],
-    "IGNORE_FILES": []
-}
-```
-
-When this format is stored at the machine-local registry location, its rules
-continue to apply globally to scanned projects.
-
-This compatibility exists so existing machine-local rules do not stop working
-merely because configuration resolution became deterministic.
-
-## Per-project registry format
-
-The preferred machine-local format is schema version 1:
-
-```json
-{
-    "schema_version": 1,
-    "projects": {
-        "example-project": {
-            "IGNORE_FOLDERS": [
-                "storage",
-                "coverage"
-            ],
-            "IGNORE_FILES": [
-                "agents.json"
-            ]
+    {
+        "schema_version": 1,
+        "projects": {
+            "example-project": {
+                "IGNORE_FOLDERS": [
+                    "storage",
+                    "coverage"
+                ],
+                "IGNORE_FILES": [
+                    "agents.json"
+                ]
+            }
         }
     }
-}
-```
 
-The file remains:
+The old global shape is rejected because personal rules must be scoped to a
+project profile.
 
-```text
-machine-local
-not distributed with Project Sniffer
-not part of a scanned project's source configuration
-```
+If an older personal-ignore file still contains rules worth preserving, move
+those rules into explicit schema-version-1 project profiles before deleting
+the legacy file.
 
 ## Project profile selection
 
@@ -130,7 +102,7 @@ identify the intended repository:
 }
 ```
 
-Absolute local paths are permitted inside this private machine-local registry.
+Absolute local paths are permitted inside this local private registry.
 
 They must not be copied into generated public examples or uploadable reports.
 
@@ -151,11 +123,11 @@ sniff
 python3 main.py /path/to/project
 ```
 
-use packaged recommended ignores, the deterministic machine-local personal
+use packaged recommended ignores, the local private schema-version-1 personal
 registry, and the same shared scanner.
 
-The repository-root `personal_ignores.json` remains private legacy material and
-is not authoritative for either current entry point.
+The repository-root legacy personal-ignore file and the former XDG/APPDATA
+locations are not authoritative for either current entry point.
 
 ## Target-project `.gitignore`
 
@@ -185,8 +157,8 @@ A target project may later provide:
 
 for project-owned scanning rules.
 
-That configuration is separate from machine-local personal preferences and is
-not implemented by the current Phase 1 configuration slice.
+That configuration is separate from local private personal preferences and is
+not implemented by the current development runtime.
 
 ## Target precedence
 
@@ -195,7 +167,7 @@ The intended complete precedence remains, highest priority first:
 1. non-overridable Project Sniffer safety rules;
 2. command-line overrides;
 3. explicit `--config`;
-4. matching machine-local personal project profile;
+4. matching local private personal project profile;
 5. target-project `.project-sniffer.toml`;
 6. user-wide Project Sniffer configuration;
 7. built-in defaults.

@@ -4,8 +4,6 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
-
 from project_sniffer.config.loader import (
     ConfigurationError,
     get_personal_registry_path,
@@ -58,7 +56,7 @@ class PersonalRegistryLoaderTests(
             newline="\n",
         )
 
-    def test_legacy_global_shape_remains_supported(
+    def test_legacy_global_shape_is_rejected(
         self,
     ) -> None:
         self.write_registry(
@@ -72,21 +70,19 @@ class PersonalRegistryLoaderTests(
             }
         )
 
-        loaded = load_personal_ignores(
-            project_path=self.project,
-            registry_path=self.registry_path,
-        )
+        with self.assertRaises(
+            ConfigurationError
+        ) as raised:
+            load_personal_ignores(
+                project_path=self.project,
+                registry_path=self.registry_path,
+            )
 
-        self.assertEqual(
-            loaded,
-            {
-                "IGNORE_FOLDERS": [
-                    "storage",
-                ],
-                "IGNORE_FILES": [
-                    "agents.json",
-                ],
-            },
+        self.assertIn(
+            "schema-version-1 per-project format",
+            str(
+                raised.exception
+            ),
         )
 
     def test_profile_id_matches_project_root_name(
@@ -287,34 +283,24 @@ class PersonalRegistryLoaderTests(
                 registry_path=self.registry_path,
             )
 
-    def test_xdg_config_home_controls_default_registry_location(
+    def test_default_registry_lives_in_package_resources(
         self,
     ) -> None:
-        config_home = (
-            self.workspace
-            / "xdg-config"
-        )
-
-        with patch.dict(
-            "os.environ",
-            {
-                "XDG_CONFIG_HOME": str(
-                    config_home
-                ),
-            },
-            clear=False,
-        ):
-            path = (
-                get_personal_registry_path()
-            )
+        path = get_personal_registry_path()
 
         self.assertEqual(
-            path,
-            (
-                config_home
-                / "project-sniffer"
-                / "personal_ignores.json"
-            ),
+            path.name,
+            "personal_ignores.json",
+        )
+
+        self.assertEqual(
+            path.parent.name,
+            "resources",
+        )
+
+        self.assertEqual(
+            path.parent.parent.name,
+            "project_sniffer",
         )
 
 

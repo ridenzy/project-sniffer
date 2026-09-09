@@ -69,21 +69,21 @@ private keys, tokens, cookies, or session material.
 
 ## Personal ignore configuration
 
-The installed CLI supports two machine-local `personal_ignores.json` formats
-during the 0.x migration period:
+The current development runtime accepts only the schema-version-1
+per-project `personal_ignores.json` shape.
 
-```text
-legacy global ignore object
-schema-version-1 per-project registry
-```
+Its local private registry is
+`src/project_sniffer/resources/personal_ignores.json`.
 
-The canonical machine-local registry is resolved outside the repository.
+That file must remain untracked and is intentionally excluded from package
+data. Project Sniffer reads it but does not create or modify it.
 
-The repository-root private file remains only as private legacy material.
-Neither `sniff` nor the current root `main.py` uses it as authoritative
-configuration.
+The legacy global JSON shape, the repository-root legacy personal-ignore file,
+and the former XDG/APPDATA personal-registry locations are not authoritative
+for the current runtime.
 
-Do not commit either machine-local or repository-root personal configuration.
+A final installed-user personal-configuration location remains a pre-1.0
+design decision.
 
 ## Baseline validation
 

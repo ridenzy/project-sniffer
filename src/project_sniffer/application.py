@@ -16,7 +16,7 @@ from project_sniffer.reading import (
 from project_sniffer.report_builder import (
     build_report,
 )
-from project_sniffer.scanner import (
+from project_sniffer.scanning import (
     ScanError,
     scan_project,
 )

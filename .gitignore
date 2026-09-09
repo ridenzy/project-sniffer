@@ -30,7 +30,7 @@ docs/private/
 # Project Sniffer generated reports
 reports/
 
-# Machine-local Project Sniffer preferences
+# Local private Project Sniffer preferences
 personal_ignores.json
 
 # Common editor and operating-system files
