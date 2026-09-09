@@ -11,6 +11,9 @@ from project_sniffer.tracing.models import (
 from project_sniffer.tracing.python_imports import (
     resolve_python_imports,
 )
+from project_sniffer.tracing.trace_renderer import (
+    render_dependency_graph,
+)
 
 
 __all__ = [
@@ -21,4 +24,5 @@ __all__ = [
     "ImportResolutionStatus",
     "build_dependency_graph",
     "resolve_python_imports",
+    "render_dependency_graph",
 ]
