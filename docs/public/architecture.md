@@ -22,6 +22,7 @@ sniff
              +-- project_sniffer.reading
              +-- project_sniffer.evidence
              +-- project_sniffer.parsing
+             +-- project_sniffer.indexing
              +-- project_sniffer.architecture_builder
              +-- project_sniffer.report_builder
              +-- project_sniffer.docs_exporter
@@ -121,7 +122,7 @@ Canonical ScanManifest
     |                                               |
     |                                               +-- Python stdlib AST parser
     |                                                       |
-    |                                                       +-- shared project indexes
+    |                                                       +-- SemanticProjectIndex
     |                                                       |
     |                                                       +-- requested analyzers
     |
@@ -182,6 +183,23 @@ statements and class, function, and async-function symbols. Unsupported
 languages and non-text or invalid evidence remain explicit parse outcomes.
 Syntax errors are recorded as parser evidence rather than causing target code
 to execute or the scan pipeline to fail.
+
+## Semantic project indexing
+
+`project_sniffer.indexing` consumes existing `SourceEvidence` through the parser
+dispatcher and constructs one immutable `SemanticProjectIndex`.
+
+The index retains every `ParsedSource`, including unsupported-language,
+non-text, invalid-text, and syntax-error outcomes. Only successfully parsed
+sources contribute flattened `IndexedImport` and `IndexedSymbol` records.
+
+Those indexed records retain their original parser evidence and source path,
+providing project-wide semantic evidence without another filesystem walk,
+without reopening source files, and without executing target-project code.
+
+The index is an evidence layer rather than a dependency resolver. Import-target
+resolution, dependency edges, call relationships, and analyzer output remain
+separate later stages.
 
 ## Core safety model
 

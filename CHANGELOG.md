@@ -49,6 +49,8 @@ The project is still in pre-1.0 development.
 - Maintained `docs/public/language-support.md` capability documentation.
 - Initial semantic parser registry and dispatcher for supported source languages.
 - Python semantic parsing through the standard-library `ast` module, producing normalized import and class/function symbol evidence without executing target code.
+- Shared semantic project indexing that retains all parse outcomes while flattening
+  successful import and symbol evidence with source-file provenance.
 
 ### Removed
 

@@ -82,6 +82,10 @@ The existing implementation can:
 - route readable source evidence through a semantic parser registry without reopening target-project files;
 - parse Python source with the standard-library `ast` module into normalized imports and class, function, and async-function symbol evidence;
 - represent unsupported languages, non-text evidence, invalid text evidence, and Python syntax failures through explicit parse statuses;
+- build a shared `SemanticProjectIndex` across parsed project sources while
+  retaining original parse outcomes and source-file provenance;
+- flatten successful parser imports and symbols into reusable project-wide
+  evidence without reopening target-project files;
 
 ## Language recognition
 
