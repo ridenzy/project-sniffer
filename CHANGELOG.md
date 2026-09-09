@@ -51,6 +51,10 @@ The project is still in pre-1.0 development.
 - Python semantic parsing through the standard-library `ast` module, producing normalized import and class/function symbol evidence without executing target code.
 - Shared semantic project indexing that retains all parse outcomes while flattening
   successful import and symbol evidence with source-file provenance.
+- Deterministic Python internal-import resolution with explicit resolved,
+  unresolved, ambiguous, and invalid-relative-import outcomes.
+- Conventional top-level `src/` source-root handling for initial Python module
+  resolution without importing or executing target-project modules.
 
 ### Removed
 

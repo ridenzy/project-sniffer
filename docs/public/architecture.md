@@ -23,6 +23,7 @@ sniff
              +-- project_sniffer.evidence
              +-- project_sniffer.parsing
              +-- project_sniffer.indexing
+             +-- project_sniffer.tracing
              +-- project_sniffer.architecture_builder
              +-- project_sniffer.report_builder
              +-- project_sniffer.docs_exporter
@@ -123,8 +124,10 @@ Canonical ScanManifest
     |                                               +-- Python stdlib AST parser
     |                                                       |
     |                                                       +-- SemanticProjectIndex
-    |                                                       |
-    |                                                       +-- requested analyzers
+    |                                                               |
+    |                                                               +-- Python import resolution
+    |                                                                       |
+    |                                                                       +-- requested analyzers
     |
     +-- --docs raw-byte export
             |
@@ -200,6 +203,29 @@ without reopening source files, and without executing target-project code.
 The index is an evidence layer rather than a dependency resolver. Import-target
 resolution, dependency edges, call relationships, and analyzer output remain
 separate later stages.
+
+## Python import resolution
+
+`project_sniffer.tracing` now consumes the shared `SemanticProjectIndex` to
+resolve normalized Python import evidence against source files already present
+in the project evidence.
+
+Resolution does not import target modules, execute target-project code, inspect
+the target interpreter environment, install dependencies, or reopen project
+source files.
+
+The initial resolver distinguishes resolved internal imports, unresolved
+imports, ambiguous internal candidates, and invalid relative imports. An
+unresolved import is intentionally not labelled external because the available
+static evidence cannot yet prove whether it represents a standard-library,
+third-party, missing, dynamically configured, or otherwise unresolved module.
+
+The current path policy recognizes modules rooted directly in the project and
+the conventional top-level `src/` Python source layout. Additional source-root
+discovery from packaging metadata remains future work.
+
+Import resolution is still evidence rather than the public `--trace` analyzer.
+Dependency graph construction and trace rendering remain later stages.
 
 ## Core safety model
 

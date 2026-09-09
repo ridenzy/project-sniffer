@@ -86,6 +86,12 @@ The existing implementation can:
   retaining original parse outcomes and source-file provenance;
 - flatten successful parser imports and symbols into reusable project-wide
   evidence without reopening target-project files;
+- resolve Python import evidence against scanned project files without importing
+  or executing target modules;
+- preserve unresolved, ambiguous, and invalid relative imports explicitly rather
+  than misclassifying them as confirmed external or internal dependencies;
+- recognize the conventional top-level `src/` Python source-root layout during
+  internal module resolution;
 
 ## Language recognition
 
