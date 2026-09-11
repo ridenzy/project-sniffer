@@ -19,6 +19,7 @@ from project_sniffer.scanning import (
 )
 from project_sniffer.tracing import (
     CallResolutionStatus,
+    CallShadowReason,
     resolve_python_calls,
     resolve_python_imports,
 )
@@ -303,6 +304,208 @@ class PythonCallResolutionTests(
             (),
         )
 
+    def test_parameter_shadows_top_level_candidate(
+        self,
+    ) -> None:
+        resolutions = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "def run(helper):\n"
+                    "    return helper()\n"
+                ),
+            ),
+        )
+
+        resolution = resolutions[0]
+
+        self.assertIs(
+            resolution.status,
+            CallResolutionStatus.SHADOWED,
+        )
+
+        self.assertIs(
+            resolution.shadowed_by,
+            CallShadowReason.PARAMETER,
+        )
+
+        self.assertEqual(
+            resolution.candidate_targets,
+            (),
+        )
+
+    def test_assignment_shadows_imported_candidate(
+        self,
+    ) -> None:
+        resolutions = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "from .worker import Worker\n"
+                    "\n"
+                    "def run():\n"
+                    "    Worker = None\n"
+                    "    return Worker()\n"
+                ),
+            ),
+            self.evidence(
+                "pkg/worker.py",
+                (
+                    "class Worker:\n"
+                    "    pass\n"
+                ),
+            ),
+        )
+
+        resolution = resolutions[0]
+
+        self.assertIs(
+            resolution.status,
+            CallResolutionStatus.SHADOWED,
+        )
+
+        self.assertIs(
+            resolution.shadowed_by,
+            CallShadowReason.ASSIGNMENT,
+        )
+
+        self.assertEqual(
+            resolution.candidate_targets,
+            (),
+        )
+
+    def test_local_import_shadows_top_level_candidate(
+        self,
+    ) -> None:
+        resolutions = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    import external as helper\n"
+                    "    return helper()\n"
+                ),
+            ),
+        )
+
+        resolution = resolutions[0]
+
+        self.assertIs(
+            resolution.status,
+            CallResolutionStatus.SHADOWED,
+        )
+
+        self.assertIs(
+            resolution.shadowed_by,
+            CallShadowReason.IMPORT,
+        )
+
+    def test_free_closure_binding_shadows_module_candidate(
+        self,
+    ) -> None:
+        resolutions = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "def outer():\n"
+                    "    helper = None\n"
+                    "\n"
+                    "    def inner():\n"
+                    "        return helper()\n"
+                ),
+            ),
+        )
+
+        resolution = resolutions[0]
+
+        self.assertIs(
+            resolution.status,
+            CallResolutionStatus.SHADOWED,
+        )
+
+        self.assertIs(
+            resolution.shadowed_by,
+            CallShadowReason.FREE,
+        )
+
+    def test_nonlocal_binding_shadows_module_candidate(
+        self,
+    ) -> None:
+        resolutions = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "def outer():\n"
+                    "    helper = None\n"
+                    "\n"
+                    "    def inner():\n"
+                    "        nonlocal helper\n"
+                    "        return helper()\n"
+                ),
+            ),
+        )
+
+        resolution = resolutions[0]
+
+        self.assertIs(
+            resolution.status,
+            CallResolutionStatus.SHADOWED,
+        )
+
+        self.assertIs(
+            resolution.shadowed_by,
+            CallShadowReason.NONLOCAL,
+        )
+
+    def test_global_declaration_does_not_shadow_module_candidate(
+        self,
+    ) -> None:
+        resolutions = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    global helper\n"
+                    "    return helper()\n"
+                ),
+            ),
+        )
+
+        resolution = resolutions[0]
+
+        self.assertIs(
+            resolution.status,
+            (
+                CallResolutionStatus
+                .POTENTIAL_INTERNAL
+            ),
+        )
+
+        self.assertIsNone(
+            resolution.shadowed_by
+        )
+
+        self.assertEqual(
+            len(
+                resolution.candidate_targets
+            ),
+            1,
+        )
 
 if __name__ == "__main__":
     unittest.main()

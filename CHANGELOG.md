@@ -74,6 +74,10 @@ The project is still in pre-1.0 development.
   call-resolution outcomes.
 - Dependency-trace rendering for Python call candidates while keeping potential
   call targets separate from confirmed dependency edges.
+- Compiler-assisted Python call-shadowing detection using existing in-memory
+  source evidence without reopening or executing target-project files.
+- Explicit shadowed-call outcomes for parameters, assignments, imports,
+  nonlocals, closure/free bindings, and other local bindings.
 
 ### Removed
 

@@ -27,10 +27,21 @@ class CallResolutionStatus(
     Enum,
 ):
     POTENTIAL_INTERNAL = "potential_internal"
+    SHADOWED = "shadowed"
     UNRESOLVED = "unresolved"
     AMBIGUOUS = "ambiguous"
     DYNAMIC = "dynamic"
 
+class CallShadowReason(
+    str,
+    Enum,
+):
+    PARAMETER = "parameter"
+    ASSIGNMENT = "assignment"
+    IMPORT = "import"
+    NONLOCAL = "nonlocal"
+    FREE = "free"
+    LOCAL = "local"
 
 class DependencyKind(
     str,
@@ -66,6 +77,7 @@ class CallResolution:
         CallTarget,
         ...,
     ] = ()
+    shadowed_by: CallShadowReason | None = None
 
 
 @dataclass(frozen=True)

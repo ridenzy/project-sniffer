@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import symtable
+
 from collections.abc import Sequence
 
 from project_sniffer.evidence import (
@@ -15,6 +17,7 @@ from project_sniffer.parsing import (
 from project_sniffer.tracing.models import (
     CallResolution,
     CallResolutionStatus,
+    CallShadowReason,
     CallTarget,
     ImportResolution,
     ImportResolutionStatus,
@@ -163,6 +166,153 @@ def _ordered_unique_targets(
         )
     )
 
+def _symbol_tables_by_path(
+    index: SemanticProjectIndex,
+) -> dict[
+    str,
+    symtable.SymbolTable,
+]:
+    tables: dict[
+        str,
+        symtable.SymbolTable,
+    ] = {}
+
+    for parsed in index.parsed_sources:
+        if (
+            parsed.source.language
+            is not SourceLanguage.PYTHON
+        ):
+            continue
+
+        content = (
+            parsed
+            .source
+            .read_result
+            .content
+        )
+
+        if content is None:
+            continue
+
+        source_path = (
+            parsed
+            .source
+            .read_result
+            .scanned_file
+            .relative_path
+        )
+
+        try:
+            tables[source_path] = (
+                symtable.symtable(
+                    content,
+                    source_path,
+                    "exec",
+                )
+            )
+        except SyntaxError:
+            continue
+
+    return tables
+
+
+def _scope_table(
+    root: symtable.SymbolTable | None,
+    scope: str | None,
+) -> symtable.SymbolTable | None:
+    if (
+        root is None
+        or scope is None
+    ):
+        return None
+
+    current = root
+
+    for part in scope.split(
+        "."
+    ):
+        try:
+            symbol = current.lookup(
+                part
+            )
+
+            current = (
+                symbol.get_namespace()
+            )
+
+        except (
+            KeyError,
+            ValueError,
+        ):
+            return None
+
+    return current
+
+
+def _scope_symbol(
+    root: symtable.SymbolTable | None,
+    scope: str | None,
+    name: str,
+) -> symtable.Symbol | None:
+    table = _scope_table(
+        root,
+        scope,
+    )
+
+    if table is None:
+        return None
+
+    try:
+        return table.lookup(
+            name
+        )
+
+    except KeyError:
+        return None
+
+
+def _shadow_reason(
+    symbol: symtable.Symbol | None,
+    *,
+    has_internal_import_candidate: bool,
+) -> CallShadowReason | None:
+    if symbol is None:
+        return None
+
+    if symbol.is_parameter():
+        return (
+            CallShadowReason.PARAMETER
+        )
+
+    if symbol.is_nonlocal():
+        return (
+            CallShadowReason.NONLOCAL
+        )
+
+    if symbol.is_free():
+        return (
+            CallShadowReason.FREE
+        )
+
+    if symbol.is_assigned():
+        return (
+            CallShadowReason.ASSIGNMENT
+        )
+
+    if symbol.is_imported():
+        if has_internal_import_candidate:
+            return None
+
+        return (
+            CallShadowReason.IMPORT
+        )
+
+    if symbol.is_local():
+        return (
+            CallShadowReason.LOCAL
+        )
+
+    return None
 
 def resolve_python_calls(
     index: SemanticProjectIndex,
@@ -181,6 +331,12 @@ def resolve_python_calls(
 
     symbols = (
         _build_top_level_symbol_index(
+            index
+        )
+    )
+
+    symbol_tables = (
+        _symbol_tables_by_path(
             index
         )
     )
@@ -247,7 +403,7 @@ def resolve_python_calls(
             evidence.target_parts[0]
         )
 
-        candidates: list[
+        same_file_candidates: list[
             CallTarget
         ] = list(
             symbols.get(
@@ -258,6 +414,10 @@ def resolve_python_calls(
                 (),
             )
         )
+
+        imported_candidates: list[
+            CallTarget
+        ] = []
 
         for import_resolution in (
             import_resolutions
@@ -309,7 +469,7 @@ def resolve_python_calls(
             if imported_name is None:
                 continue
 
-            candidates.extend(
+            imported_candidates.extend(
                 symbols.get(
                     (
                         import_resolution
@@ -319,6 +479,56 @@ def resolve_python_calls(
                     (),
                 )
             )
+
+        scope_symbol = (
+            _scope_symbol(
+                symbol_tables.get(
+                    source_path
+                ),
+                evidence.scope,
+                target_name,
+            )
+        )
+
+        shadowed_by = (
+            _shadow_reason(
+                scope_symbol,
+                has_internal_import_candidate=bool(
+                    imported_candidates
+                ),
+            )
+        )
+
+        if shadowed_by is not None:
+            resolutions.append(
+                CallResolution(
+                    source_path=source_path,
+                    evidence=evidence,
+                    status=(
+                        CallResolutionStatus
+                        .SHADOWED
+                    ),
+                    candidate_targets=(),
+                    shadowed_by=shadowed_by,
+                )
+            )
+
+            continue
+
+        if (
+            scope_symbol is not None
+            and scope_symbol.is_imported()
+            and imported_candidates
+        ):
+            candidates = (
+                imported_candidates
+            )
+
+        else:
+            candidates = [
+                *same_file_candidates,
+                *imported_candidates,
+            ]
 
         ordered_candidates = (
             _ordered_unique_targets(

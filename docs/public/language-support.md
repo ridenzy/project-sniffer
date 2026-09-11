@@ -21,8 +21,8 @@ Python while the remaining registered languages are still recognition-only.
 
 Phase 2F-C now provides level-4 analyzer support for confirmed internal Python
 import dependencies and conservative Python call-target candidate resolution
-through the initial `--trace` analyzer. Potential call targets are not confirmed
-call dependency edges.
+through the initial `--trace` analyzer. It also has conservative direct-name candidate resolution plus compiler-assisted shadowing
+rejection.. Potential call targets are not confirmed call dependency edges.
 
 ## Recognition policy
 

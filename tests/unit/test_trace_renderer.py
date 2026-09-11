@@ -70,6 +70,9 @@ class TraceRendererTests(
                         "\n"
                         "def build():\n"
                         "    return Worker()\n"
+                        "\n"
+                        "def shadowed(Worker):\n"
+                        "    return Worker()\n"
                     ),
                 ),
                 self.evidence(
@@ -138,6 +141,21 @@ class TraceRendererTests(
 
         self.assertIn(
             "- Potential internal calls: 1",
+            rendered,
+        )
+
+        self.assertIn(
+            "- Shadowed calls: 1",
+            rendered,
+        )
+
+        self.assertIn(
+            "## Shadowed call candidates",
+            rendered,
+        )
+
+        self.assertIn(
+            "shadowed by `parameter`",
             rendered,
         )
 

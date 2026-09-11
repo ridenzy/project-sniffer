@@ -117,6 +117,15 @@ def render_dependency_graph(
         )
     )
 
+    shadowed_calls = tuple(
+        item
+        for item in graph.call_resolutions
+        if (
+            item.status
+            is CallResolutionStatus.SHADOWED
+        )
+    )
+
     unresolved_calls = tuple(
         item
         for item in graph.call_resolutions
@@ -172,6 +181,10 @@ def render_dependency_graph(
         (
             "- Dynamic calls: "
             f"{len(dynamic_calls)}"
+        ),
+        (
+            "- Shadowed calls: "
+            f"{len(shadowed_calls)}"
         ),
         "",
         "## Confirmed internal dependencies",
@@ -291,6 +304,39 @@ def render_dependency_graph(
         lines.append(
             "- None."
         )
+
+    lines.extend(
+        [
+            "",
+            "## Shadowed call candidates",
+            "",
+        ]
+    )
+
+    if shadowed_calls:
+        for resolution in shadowed_calls:
+            reason = (
+                resolution.shadowed_by.value
+                if resolution.shadowed_by
+                is not None
+                else "unknown"
+            )
+
+            lines.append(
+                "- "
+                f"`{resolution.source_path}`:"
+                f"{resolution.evidence.line} "
+                f"`{_call_label(resolution)}` "
+                f"shadowed by `{reason}` "
+                f"(scope "
+                f"`{_scope_label(resolution.evidence.scope)}`)"
+            )
+
+    else:
+        lines.append(
+            "- None."
+        )
+
 
     lines.extend(
         [

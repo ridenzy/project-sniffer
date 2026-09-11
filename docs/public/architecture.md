@@ -261,6 +261,18 @@ shadow an apparently matching symbol. Binding and shadowing analysis is therefor
 required before potential call candidates can safely become confirmed call
 edges.
 
+The call resolver now also uses Python's compiler-generated symbol-table
+information from the already-read source text. It does not reopen source files
+or execute target code.
+
+Named function/class scopes can therefore reject candidate targets when the
+compiler identifies the called name as a parameter, assignment, local import,
+nonlocal, free closure binding, or other local binding.
+
+These outcomes are recorded as `SHADOWED`. This improves false-positive
+rejection but still does not promote remaining `POTENTIAL_INTERNAL` candidates
+to confirmed call edges.
+
 ## Dependency graph
 
 `project_sniffer.tracing.dependency_graph` converts confirmed internal import

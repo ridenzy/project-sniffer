@@ -111,6 +111,10 @@ The existing implementation can:
   rather than presenting uncertain calls as confirmed relationships;
 - render call-resolution evidence through `--trace` while keeping potential
   call targets separate from confirmed dependency edges;
+- use Python compiler symbol-table evidence to reject call candidates shadowed
+  by parameters, assignments, imports, closure bindings, and other local
+  bindings;
+- render shadowed calls separately from potential internal call candidates.
 
 ## Language recognition
 
