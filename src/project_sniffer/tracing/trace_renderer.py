@@ -6,6 +6,7 @@ from project_sniffer.tracing.models import (
     DependencyGraph,
     ImportResolution,
     ImportResolutionStatus,
+    DependencyKind,
 )
 
 def _requested_label(
@@ -105,6 +106,18 @@ def render_dependency_graph(
         )
     )
 
+    resolved_calls = tuple(
+        item
+        for item in graph.call_resolutions
+        if (
+            item.status
+            is (
+                CallResolutionStatus
+                .RESOLVED_INTERNAL
+            )
+        )
+    )
+
     potential_calls = tuple(
         item
         for item in graph.call_resolutions
@@ -163,6 +176,10 @@ def render_dependency_graph(
         f"- Call resolutions: {len(graph.call_resolutions)}",
         f"- Confirmed internal edges: {len(graph.edges)}",
         f"- Resolved internal imports: {len(resolved)}",
+        (
+            "- Resolved internal calls: "
+            f"{len(resolved_calls)}"
+        ),
         f"- Unresolved imports: {len(unresolved)}",
         f"- Ambiguous imports: {len(ambiguous)}",
         f"- Invalid relative imports: {len(invalid_relative)}",
@@ -199,12 +216,35 @@ def render_dependency_graph(
                 else "<module>"
             )
 
-            lines.append(
-                "- "
-                f"`{edge.source_path}` "
-                f"→ `{edge.target_path}` "
-                f"(line {edge.line}, scope `{scope}`)"
-            )
+            if (
+                edge.kind
+                is DependencyKind.CALL
+            ):
+                target_symbol = (
+                    edge.target_symbol
+                    if edge.target_symbol
+                    is not None
+                    else "<unknown>"
+                )
+
+                lines.append(
+                    "- [CALL] "
+                    f"`{edge.source_path}"
+                    f"::{scope}` "
+                    "→ "
+                    f"`{edge.target_path}"
+                    f"::{target_symbol}` "
+                    f"(line {edge.line})"
+                )
+
+            else:
+                lines.append(
+                    "- [IMPORT] "
+                    f"`{edge.source_path}` "
+                    f"→ `{edge.target_path}` "
+                    f"(line {edge.line}, "
+                    f"scope `{scope}`)"
+                )
     else:
         lines.append(
             "- None."

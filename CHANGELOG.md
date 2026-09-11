@@ -78,6 +78,10 @@ The project is still in pre-1.0 development.
   source evidence without reopening or executing target-project files.
 - Explicit shadowed-call outcomes for parameters, assignments, imports,
   nonlocals, closure/free bindings, and other local bindings.
+- Positive static proof for stable internal Python `from ... import ...`
+  call bindings, producing explicit `RESOLVED_INTERNAL` call outcomes.
+- Confirmed Python `CALL` dependency edges with caller scope, target symbol,
+  source location, and proof provenance.
 
 ### Removed
 

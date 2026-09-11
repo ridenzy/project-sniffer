@@ -17,6 +17,7 @@ from project_sniffer.parsing import (
 from project_sniffer.tracing.models import (
     CallResolution,
     CallResolutionStatus,
+    CallResolutionProof,
     CallShadowReason,
     CallTarget,
     ImportResolution,
@@ -166,6 +167,81 @@ def _ordered_unique_targets(
         )
     )
 
+def _confirmed_import_target(
+    *,
+    root: symtable.SymbolTable | None,
+    target_name: str,
+    ordered_candidates: tuple[
+        CallTarget,
+        ...,
+    ],
+    imported_bindings: Sequence[
+        tuple[
+            ImportResolution,
+            CallTarget,
+        ]
+    ],
+) -> tuple[
+    CallTarget | None,
+    CallResolutionProof | None,
+]:
+    if len(
+        ordered_candidates
+    ) != 1:
+        return None, None
+
+    target = ordered_candidates[0]
+
+    matching_bindings = tuple(
+        (
+            resolution,
+            candidate,
+        )
+        for (
+            resolution,
+            candidate,
+        )
+        in imported_bindings
+        if candidate == target
+    )
+
+    if len(
+        matching_bindings
+    ) != 1:
+        return None, None
+
+    resolution, _ = (
+        matching_bindings[0]
+    )
+
+    symbol = _binding_symbol(
+        root,
+        resolution.evidence.scope,
+        target_name,
+    )
+
+    if symbol is None:
+        return None, None
+
+    if not symbol.is_imported():
+        return None, None
+
+    if (
+        symbol.is_assigned()
+        or symbol.is_parameter()
+        or symbol.is_nonlocal()
+        or symbol.is_free()
+    ):
+        return None, None
+
+    return (
+        target,
+        (
+            CallResolutionProof
+            .INTERNAL_IMPORT_BINDING
+        ),
+    )
+
 def _symbol_tables_by_path(
     index: SemanticProjectIndex,
 ) -> dict[
@@ -270,6 +346,32 @@ def _scope_symbol(
     except KeyError:
         return None
 
+def _binding_symbol(
+    root: symtable.SymbolTable | None,
+    binding_scope: str | None,
+    name: str,
+) -> symtable.Symbol | None:
+    if root is None:
+        return None
+
+    if binding_scope is None:
+        table = root
+    else:
+        table = _scope_table(
+            root,
+            binding_scope,
+        )
+
+    if table is None:
+        return None
+
+    try:
+        return table.lookup(
+            name
+        )
+
+    except KeyError:
+        return None
 
 def _shadow_reason(
     symbol: symtable.Symbol | None,
@@ -419,6 +521,13 @@ def resolve_python_calls(
             CallTarget
         ] = []
 
+        imported_bindings: list[
+            tuple[
+                ImportResolution,
+                CallTarget,
+            ]
+        ] = []
+
         for import_resolution in (
             import_resolutions
         ):
@@ -469,7 +578,7 @@ def resolve_python_calls(
             if imported_name is None:
                 continue
 
-            imported_candidates.extend(
+            matching_targets = (
                 symbols.get(
                     (
                         import_resolution
@@ -478,6 +587,19 @@ def resolve_python_calls(
                     ),
                     (),
                 )
+            )
+
+            imported_candidates.extend(
+                matching_targets
+            )
+
+            imported_bindings.extend(
+                (
+                    import_resolution,
+                    target,
+                )
+                for target
+                in matching_targets
             )
 
         scope_symbol = (
@@ -536,7 +658,30 @@ def resolve_python_calls(
             )
         )
 
-        if not ordered_candidates:
+        resolved_target, proof = (
+            _confirmed_import_target(
+                root=(
+                    symbol_tables.get(
+                        source_path
+                    )
+                ),
+                target_name=target_name,
+                ordered_candidates=(
+                    ordered_candidates
+                ),
+                imported_bindings=(
+                    imported_bindings
+                ),
+            )
+        )
+
+        if resolved_target is not None:
+            status = (
+                CallResolutionStatus
+                .RESOLVED_INTERNAL
+            )
+
+        elif not ordered_candidates:
             status = (
                 CallResolutionStatus
                 .UNRESOLVED
@@ -564,6 +709,8 @@ def resolve_python_calls(
                 candidate_targets=(
                     ordered_candidates
                 ),
+                resolved_target=resolved_target,
+                proof=proof,
             )
         )
 

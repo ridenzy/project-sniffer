@@ -19,6 +19,7 @@ from project_sniffer.scanning import (
 )
 from project_sniffer.tracing import (
     CallResolutionStatus,
+    CallResolutionProof,
     CallShadowReason,
     resolve_python_calls,
     resolve_python_imports,
@@ -130,7 +131,7 @@ class PythonCallResolutionTests(
             "helper",
         )
 
-    def test_resolved_imported_symbol_is_potential_candidate(
+    def test_stable_imported_symbol_is_resolved_internal(
         self,
     ) -> None:
         resolutions = self.resolve(
@@ -158,7 +159,37 @@ class PythonCallResolutionTests(
             resolution.status,
             (
                 CallResolutionStatus
-                .POTENTIAL_INTERNAL
+                .RESOLVED_INTERNAL
+            ),
+        )
+
+        self.assertIsNotNone(
+            resolution.resolved_target
+        )
+
+        self.assertEqual(
+            (
+                resolution
+                .resolved_target
+                .source_path
+            ),
+            "pkg/worker.py",
+        )
+
+        self.assertEqual(
+            (
+                resolution
+                .resolved_target
+                .qualified_name
+            ),
+            "Worker",
+        )
+
+        self.assertIs(
+            resolution.proof,
+            (
+                CallResolutionProof
+                .INTERNAL_IMPORT_BINDING
             ),
         )
 
@@ -206,9 +237,27 @@ class PythonCallResolutionTests(
             resolution.status,
             (
                 CallResolutionStatus
+                .RESOLVED_INTERNAL
+            ),
+        )
+
+        self.assertIs(
+            resolution.proof,
+            (
+                CallResolutionProof
+                .INTERNAL_IMPORT_BINDING
+            ),
+        )
+
+        """
+        self.assertIs(
+            resolution.status,
+            (
+                CallResolutionStatus
                 .POTENTIAL_INTERNAL
             ),
         )
+        """
 
         self.assertEqual(
             (
@@ -505,6 +554,99 @@ class PythonCallResolutionTests(
                 resolution.candidate_targets
             ),
             1,
+        )
+
+    def test_local_internal_import_is_resolved_internal(
+        self,
+    ) -> None:
+        resolutions = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "def run():\n"
+                    "    from .worker import Worker\n"
+                    "    return Worker()\n"
+                ),
+            ),
+            self.evidence(
+                "pkg/worker.py",
+                (
+                    "class Worker:\n"
+                    "    pass\n"
+                ),
+            ),
+        )
+
+        resolution = resolutions[0]
+
+        self.assertIs(
+            resolution.status,
+            (
+                CallResolutionStatus
+                .RESOLVED_INTERNAL
+            ),
+        )
+
+        self.assertIsNotNone(
+            resolution.resolved_target
+        )
+
+        self.assertEqual(
+            (
+                resolution
+                .resolved_target
+                .source_path
+            ),
+            "pkg/worker.py",
+        )
+
+        self.assertIs(
+            resolution.proof,
+            (
+                CallResolutionProof
+                .INTERNAL_IMPORT_BINDING
+            ),
+        )
+
+    def test_module_import_reassignment_prevents_confirmation(
+        self,
+    ) -> None:
+        resolutions = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "from .worker import Worker\n"
+                    "Worker = replacement\n"
+                    "\n"
+                    "def run():\n"
+                    "    return Worker()\n"
+                ),
+            ),
+            self.evidence(
+                "pkg/worker.py",
+                (
+                    "class Worker:\n"
+                    "    pass\n"
+                ),
+            ),
+        )
+
+        resolution = resolutions[0]
+
+        self.assertIs(
+            resolution.status,
+            (
+                CallResolutionStatus
+                .POTENTIAL_INTERNAL
+            ),
+        )
+
+        self.assertIsNone(
+            resolution.resolved_target
+        )
+
+        self.assertIsNone(
+            resolution.proof
         )
 
 if __name__ == "__main__":

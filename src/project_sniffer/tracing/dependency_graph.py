@@ -4,6 +4,7 @@ from project_sniffer.indexing import (
     SemanticProjectIndex,
 )
 from project_sniffer.tracing.models import (
+    CallResolutionStatus,
     DependencyEdge,
     DependencyGraph,
     DependencyKind,
@@ -86,6 +87,49 @@ def build_dependency_graph(
                     .scope
                 ),
                 resolution=resolution,
+            )
+        )
+
+    for resolution in call_resolutions:
+        if (
+            resolution.status
+            is not (
+                CallResolutionStatus
+                .RESOLVED_INTERNAL
+            )
+        ):
+            continue
+
+        target = (
+            resolution.resolved_target
+        )
+
+        if target is None:
+            continue
+
+        edges.append(
+            DependencyEdge(
+                source_path=(
+                    resolution.source_path
+                ),
+                target_path=(
+                    target.source_path
+                ),
+                kind=DependencyKind.CALL,
+                line=(
+                    resolution
+                    .evidence
+                    .line
+                ),
+                scope=(
+                    resolution
+                    .evidence
+                    .scope
+                ),
+                resolution=resolution,
+                target_symbol=(
+                    target.qualified_name
+                ),
             )
         )
 

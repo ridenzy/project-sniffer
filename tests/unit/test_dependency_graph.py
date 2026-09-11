@@ -75,7 +75,7 @@ class DependencyGraphTests(
             index
         )
 
-    def test_resolved_internal_import_becomes_dependency_edge(
+    def test_resolved_import_and_call_become_dependency_edges(
         self,
     ) -> None:
         graph = self.graph(
@@ -119,7 +119,7 @@ class DependencyGraphTests(
             graph.call_resolutions[0].status,
             (
                 CallResolutionStatus
-                .POTENTIAL_INTERNAL
+                .RESOLVED_INTERNAL
             ),
         )
 
@@ -127,39 +127,45 @@ class DependencyGraphTests(
             len(
                 graph.edges
             ),
-            1,
+            2,
         )
 
-        edge = graph.edges[0]
+        import_edge = graph.edges[0]
+        call_edge = graph.edges[1]
 
         self.assertIs(
-            edge.kind,
-            DependencyKind.IMPORT,
+            call_edge.kind,
+            DependencyKind.CALL,
         )
 
         self.assertEqual(
-            edge.source_path,
+            call_edge.source_path,
             "pkg/app.py",
         )
 
         self.assertEqual(
-            edge.target_path,
+            call_edge.target_path,
             "pkg/worker.py",
         )
 
         self.assertEqual(
-            edge.line,
-            2,
+            call_edge.target_symbol,
+            "Worker",
         )
 
         self.assertEqual(
-            edge.scope,
+            call_edge.line,
+            3,
+        )
+
+        self.assertEqual(
+            call_edge.scope,
             "load",
         )
 
         self.assertIs(
-            edge.resolution,
-            graph.import_resolutions[0],
+            call_edge.resolution,
+            graph.call_resolutions[0],
         )
 
     def test_uncertain_imports_remain_without_edges(
@@ -191,6 +197,42 @@ class DependencyGraphTests(
                     ImportResolutionStatus
                     .INVALID_RELATIVE_IMPORT
                 ),
+            ),
+        )
+
+        self.assertEqual(
+            graph.edges,
+            (),
+        )
+
+    def test_potential_same_file_call_does_not_become_edge(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    return helper()\n"
+                ),
+            ),
+        )
+
+        self.assertEqual(
+            len(
+                graph.call_resolutions
+            ),
+            1,
+        )
+
+        self.assertIs(
+            graph.call_resolutions[0].status,
+            (
+                CallResolutionStatus
+                .POTENTIAL_INTERNAL
             ),
         )
 

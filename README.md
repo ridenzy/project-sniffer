@@ -96,13 +96,13 @@ The existing implementation can:
 - recognize the conventional top-level `src/` Python source-root layout during
   internal module resolution;
 - build an immutable project dependency graph from confirmed internal Python
-  import resolutions;
-- preserve every import-resolution outcome while creating dependency edges only
-  for relationships supported by deterministic internal evidence;
-- retain source path, target path, source line, and enclosing scope on import
-  dependency edges;
-- render the initial dependency trace from the shared semantic index and
-  confirmed internal Python import-resolution evidence;
+  imports and positively proven internal Python calls;
+- preserve every import- and call-resolution outcome while creating dependency
+  edges only for relationships supported by deterministic internal evidence;
+- retain source path, target path, source line, and enclosing scope on confirmed
+  dependency edges, plus target-symbol provenance on confirmed call edges;
+- render dependency traces from the shared semantic index with confirmed
+  internal Python `IMPORT` and `CALL` edges;
 - normalize Python call sites into direct-name, attribute-chain, and dynamic
   evidence while preserving source line and enclosing parser scope;
 - resolve conservative Python direct-name call candidates against same-file
@@ -115,6 +115,13 @@ The existing implementation can:
   by parameters, assignments, imports, closure bindings, and other local
   bindings;
 - render shadowed calls separately from potential internal call candidates.
+- positively confirm direct-name calls backed by one unique resolved internal
+  `from ... import ...` binding whose compiler symbol-table entry has not been
+  reassigned;
+- distinguish confirmed internal calls from potential, shadowed, ambiguous,
+  unresolved, and dynamic call evidence;
+- render confirmed caller scope and target-symbol relationships through
+  `--trace`.
 
 ## Language recognition
 

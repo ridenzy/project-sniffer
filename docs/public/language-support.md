@@ -19,10 +19,14 @@ The capability levels are:
 Phase 2F-A implements levels 1 and 2. Phase 2F-B now provides level 3 for
 Python while the remaining registered languages are still recognition-only.
 
-Phase 2F-C now provides level-4 analyzer support for confirmed internal Python
-import dependencies and conservative Python call-target candidate resolution
-through the initial `--trace` analyzer. It also has conservative direct-name candidate resolution plus compiler-assisted shadowing
-rejection.. Potential call targets are not confirmed call dependency edges.
+Phase 2F-C provides level-4 analyzer support for confirmed internal Python
+imports, conservative call-candidate resolution, compiler-assisted shadowing
+rejection, and the first positively proven internal Python call relationships.
+
+Confirmed calls currently require a unique resolved internal import binding
+that has not been reassigned according to Python compiler symbol-table evidence.
+Other potential, shadowed, ambiguous, unresolved, and dynamic calls remain
+explicitly separate.
 
 ## Recognition policy
 
@@ -144,11 +148,12 @@ separate future concern.
 | `zig` | Zig | programming | Yes | `zig` |  |
 | `unknown` | Unknown | unknown | Registered only | `text` | No deterministic language evidence was available. |
 
-The Python parser also records normalized call-site evidence. The initial
-`--trace` analyzer currently consumes confirmed internal import dependencies;
-call-target resolution and call-edge rendering remain the next trace stage.
-Broader trace support for routes, APIs, file operations, exports, database
-usage, and additional languages remains future work.
+The Python parser also records normalized call-site evidence. The `--trace`
+analyzer now consumes conservative direct-name call-target candidate resolution,
+compiler-assisted shadowing evidence, and positively proven internal calls in
+addition to confirmed internal imports. Only positively proven calls become
+confirmed call dependency edges; weaker call evidence remains explicitly
+uncertain.
 
 ## Parser support
 
@@ -162,12 +167,15 @@ All other registered languages currently remain recognition-only. Python
 parsing uses the standard-library AST and does not import or execute target
 modules.
 
-The initial `--trace` analyzer consumes confirmed internal Python import
-dependencies and conservative Python direct-name call-target candidates.
-Candidate call targets are rendered with explicit uncertainty and are not
-confirmed call dependency edges. Attribute-chain and dynamic-call resolution,
-stronger binding proof, routes, APIs, file operations, exports, database usage,
-and additional languages remain later stages.
+The `--trace` analyzer currently consumes confirmed internal Python imports,
+conservative direct-name call candidates, compiler-assisted shadowing evidence,
+and positively proven internal calls. Confirmed calls currently require stable
+internal import bindings; remaining candidates continue to be rendered with
+explicit uncertainty.
+
+Attribute-chain and method resolution, broader dynamic-call classification,
+additional binding proofs, routes, APIs, file operations, exports, database
+usage, and additional parser languages remain later stages.
 
 ## Future detection layers
 

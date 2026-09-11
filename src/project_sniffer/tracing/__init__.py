@@ -4,6 +4,7 @@ from project_sniffer.tracing.dependency_graph import (
 from project_sniffer.tracing.models import (
     CallResolution,
     CallResolutionStatus,
+    CallResolutionProof,
     CallShadowReason,
     CallTarget,
     DependencyEdge,
@@ -26,6 +27,7 @@ from project_sniffer.tracing.trace_renderer import (
 __all__ = [
     "CallResolution",
     "CallResolutionStatus",
+    "CallResolutionProof",
     "CallShadowReason",
     "CallTarget",
     "DependencyEdge",

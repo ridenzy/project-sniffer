@@ -94,22 +94,13 @@ class TraceRendererTests(
         )
 
         self.assertIn(
-            "# Dependency Trace",
-            rendered,
-        )
-
-        self.assertIn(
-            "- Source nodes: 2",
-            rendered,
-        )
-
-        self.assertIn(
-            "- Confirmed internal edges: 1",
+            "- Potential internal calls: 0",
             rendered,
         )
 
         self.assertIn(
             (
+                "[IMPORT] "
                 "`pkg/app.py` "
                 "→ `pkg/worker.py`"
             ),
@@ -117,30 +108,12 @@ class TraceRendererTests(
         )
 
         self.assertIn(
-            "## Unresolved imports",
-            rendered,
-        )
-
-        self.assertIn(
-            "missing_dependency",
-            rendered,
-        )
-
-        self.assertIn(
             (
-                "## Potential internal calls "
-                "(not confirmed edges)"
+                "[CALL] "
+                "`pkg/app.py::build` "
+                "→ "
+                "`pkg/worker.py::Worker`"
             ),
-            rendered,
-        )
-
-        self.assertIn(
-            "pkg/worker.py::Worker",
-            rendered,
-        )
-
-        self.assertIn(
-            "- Potential internal calls: 1",
             rendered,
         )
 

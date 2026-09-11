@@ -26,11 +26,20 @@ class CallResolutionStatus(
     str,
     Enum,
 ):
+    RESOLVED_INTERNAL = "resolved_internal"
     POTENTIAL_INTERNAL = "potential_internal"
     SHADOWED = "shadowed"
     UNRESOLVED = "unresolved"
     AMBIGUOUS = "ambiguous"
     DYNAMIC = "dynamic"
+
+class CallResolutionProof(
+    str,
+    Enum,
+):
+    INTERNAL_IMPORT_BINDING = (
+        "internal_import_binding"
+    )
 
 class CallShadowReason(
     str,
@@ -48,6 +57,7 @@ class DependencyKind(
     Enum,
 ):
     IMPORT = "import"
+    CALL = "call"
 
 
 @dataclass(frozen=True)
@@ -77,6 +87,8 @@ class CallResolution:
         CallTarget,
         ...,
     ] = ()
+    resolved_target: CallTarget | None = None
+    proof: CallResolutionProof | None = None
     shadowed_by: CallShadowReason | None = None
 
 
@@ -87,7 +99,11 @@ class DependencyEdge:
     kind: DependencyKind
     line: int
     scope: str | None
-    resolution: ImportResolution
+    resolution: (
+        ImportResolution
+        | CallResolution
+    )
+    target_symbol: str | None = None
 
 
 @dataclass(frozen=True)

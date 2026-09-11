@@ -209,11 +209,11 @@ providing project-wide semantic evidence without another filesystem walk,
 without reopening source files, and without executing target-project code.
 
 The index is an evidence layer rather than a dependency resolver. Python import
-resolution and conservative Python call-candidate resolution consume the shared
-index. The initial `--trace` analyzer renders both evidence classes, but only
-confirmed internal import resolutions currently become dependency edges.
-Potential call targets remain explicit evidence and are not promoted to
-confirmed call relationships.
+resolution and Python call resolution consume the shared index. The `--trace`
+analyzer renders both evidence classes. Confirmed internal imports become
+`IMPORT` edges, while positively proven internal calls become `CALL` edges.
+Potential, shadowed, ambiguous, unresolved, and dynamic call outcomes remain
+explicit evidence rather than inferred relationships.
 
 ## Python import resolution
 
@@ -235,10 +235,10 @@ The current path policy recognizes modules rooted directly in the project and
 the conventional top-level `src/` Python source layout. Additional source-root
 discovery from packaging metadata remains future work.
 
-Import resolution feeds dependency-graph construction. The initial trace
-renderer and public `--trace` analyzer consume that graph. Current confirmed
-trace edges cover Python import dependencies; broader trace evidence remains a
-later development stage.
+Import resolution feeds dependency-graph construction. Confirmed internal
+imports become `IMPORT` dependency edges. Python call resolution consumes those
+resolved import bindings separately and may create `CALL` edges only when its
+own positive static proof succeeds.
 
 ## Python call candidate resolution
 
@@ -273,23 +273,39 @@ These outcomes are recorded as `SHADOWED`. This improves false-positive
 rejection but still does not promote remaining `POTENTIAL_INTERNAL` candidates
 to confirmed call edges.
 
+The resolver now positively confirms a narrow first class of call targets:
+direct-name calls backed by one resolved internal `from ... import ...`
+binding whose compiler symbol-table entry is imported and has not been
+reassigned.
+
+Such outcomes are recorded as `RESOLVED_INTERNAL`. This is static binding proof,
+not a guarantee that a call executes at runtime.
+
+`RESOLVED_INTERNAL` calls become `CALL` dependency edges. Same-file top-level
+name matches and other weaker candidates remain `POTENTIAL_INTERNAL` until
+stronger positive binding proof is implemented.
+
 ## Dependency graph
 
 `project_sniffer.tracing.dependency_graph` converts confirmed internal import
-resolutions into immutable dependency edges.
+and call resolutions into immutable dependency edges.
 
 Every parsed source path remains represented as a graph node, including files
 that have no dependency edges. The graph retains the complete import-resolution
 and call-resolution collections so uncertain semantic evidence remains visible
 without being converted into confirmed relationships.
 
-Only `RESOLVED_INTERNAL` imports currently become dependency edges. Unresolved,
-ambiguous, or invalid imports never become inferred relationships, and
-`POTENTIAL_INTERNAL` calls remain call-resolution evidence rather than confirmed
-call edges.
+Only `RESOLVED_INTERNAL` imports and calls currently become dependency edges:
 
-Each import dependency edge retains its source path, target path, source line,
-enclosing parser scope, and original `ImportResolution` evidence.
+- resolved imports become `IMPORT` edges;
+- positively proven resolved calls become `CALL` edges.
+
+Potential, shadowed, ambiguous, unresolved, and dynamic calls do not become
+confirmed edges.
+
+Import edges retain source path, target path, source line, enclosing scope, and
+their original `ImportResolution`. Call edges additionally retain the confirmed
+target symbol and their original `CallResolution` proof evidence.
 
 The dependency graph remains an internal semantic-analysis layer, but it is now
 consumed by the trace renderer and the public `--trace` analyzer. Broader trace
