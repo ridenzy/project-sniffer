@@ -10,6 +10,9 @@ from project_sniffer.evidence import (
 from project_sniffer.indexing import (
     build_semantic_project_index,
 )
+from project_sniffer.parsing import (
+    DynamicCallKind,
+)
 from project_sniffer.reading import (
     FileReadResult,
     FileReadStatus,
@@ -351,6 +354,93 @@ class PythonCallResolutionTests(
         self.assertEqual(
             resolutions[0].candidate_targets,
             (),
+        )
+
+        self.assertIs(
+            resolutions[0].dynamic_kind,
+            DynamicCallKind.SUBSCRIPT_SELECTED,
+        )
+
+    def test_callback_parameter_without_internal_candidate_is_dynamic(
+        self,
+    ) -> None:
+        resolutions = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "def run(callback):\n"
+                    "    return callback()\n"
+                ),
+            ),
+        )
+
+        resolution = resolutions[0]
+
+        self.assertIs(
+            resolution.status,
+            CallResolutionStatus.DYNAMIC,
+        )
+
+        self.assertIs(
+            resolution.dynamic_kind,
+            DynamicCallKind.CALLBACK_PARAMETER,
+        )
+
+        self.assertIsNone(
+            resolution.shadowed_by
+        )
+
+        self.assertEqual(
+            resolution.candidate_targets,
+            (),
+        )
+
+
+    def test_getattr_result_dynamic_kind_is_preserved(
+        self,
+    ) -> None:
+        resolutions = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "def run(service, name):\n"
+                    "    return getattr(service, name)()\n"
+                ),
+            ),
+        )
+
+        self.assertIs(
+            resolutions[0].status,
+            CallResolutionStatus.DYNAMIC,
+        )
+
+        self.assertIs(
+            resolutions[0].dynamic_kind,
+            DynamicCallKind.GETATTR_RESULT,
+        )
+
+
+    def test_returned_callable_dynamic_kind_is_preserved(
+        self,
+    ) -> None:
+        resolutions = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "def run():\n"
+                    "    return make_callback()()\n"
+                ),
+            ),
+        )
+
+        self.assertIs(
+            resolutions[0].status,
+            CallResolutionStatus.DYNAMIC,
+        )
+
+        self.assertIs(
+            resolutions[0].dynamic_kind,
+            DynamicCallKind.RETURNED_CALLABLE,
         )
 
     def test_parameter_shadows_top_level_candidate(

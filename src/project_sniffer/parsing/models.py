@@ -26,6 +26,13 @@ class CallTargetKind(str, Enum):
     ATTRIBUTE = "attribute"
     DYNAMIC = "dynamic"
 
+class DynamicCallKind(str, Enum):
+    CALLBACK_PARAMETER = "callback_parameter"
+    SUBSCRIPT_SELECTED = "subscript_selected"
+    GETATTR_RESULT = "getattr_result"
+    RETURNED_CALLABLE = "returned_callable"
+    OTHER = "other"
+
 
 @dataclass(frozen=True)
 class ImportEvidence:
@@ -51,6 +58,7 @@ class CallEvidence:
     target_parts: tuple[str, ...]
     scope: str | None
     line: int
+    dynamic_kind: DynamicCallKind | None = None
 
 @dataclass(frozen=True)
 class ParsedSource:

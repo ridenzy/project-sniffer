@@ -87,6 +87,14 @@ The project is still in pre-1.0 development.
   re-resolving call evidence.
 - Dependency-trace caller/callee sections with confirmed caller and callee
   endpoint counts while preserving the original dependency-edge provenance.
+- Structured dynamic Python call classification for callback parameters,
+  subscript-selected callables, `getattr` results, returned callables, and
+  other dynamically computed targets.
+- Direct-name calls through runtime parameters with no internal candidate are
+  classified as dynamic callback evidence while parameters that shadow a real
+  internal candidate remain explicit `SHADOWED` outcomes.
+- Dependency-trace dynamic-call entries now include their preserved dynamic
+  call kind without promoting uncertain calls into confirmed dependency edges.
 
 ### Removed
 

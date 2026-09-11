@@ -5,6 +5,7 @@ from enum import Enum
 
 from project_sniffer.parsing import (
     CallEvidence,
+    DynamicCallKind,
     ImportEvidence,
     SymbolKind,
 )
@@ -90,6 +91,7 @@ class CallResolution:
     resolved_target: CallTarget | None = None
     proof: CallResolutionProof | None = None
     shadowed_by: CallShadowReason | None = None
+    dynamic_kind: DynamicCallKind | None = None
 
 
 @dataclass(frozen=True)

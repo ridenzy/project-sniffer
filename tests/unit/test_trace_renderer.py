@@ -172,6 +172,43 @@ class TraceRendererTests(
             rendered,
         )
 
+    def test_renderer_labels_dynamic_call_kinds(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "def run(callback, callbacks):\n"
+                        "    callback()\n"
+                        "    callbacks[0]()\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            "- Dynamic calls: 2",
+            rendered,
+        )
+
+        self.assertIn(
+            "kind `callback_parameter`",
+            rendered,
+        )
+
+        self.assertIn(
+            "kind `subscript_selected`",
+            rendered,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

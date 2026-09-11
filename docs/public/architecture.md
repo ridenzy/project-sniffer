@@ -255,9 +255,15 @@ already-resolved internal `from ... import ...` binding, including imported
 aliases.
 
 Call resolution currently distinguishes potential internal, unresolved,
-ambiguous, and dynamic outcomes. Attribute-chain calls remain unresolved unless
-stronger type or binding evidence becomes available, and dynamically computed
-call targets remain explicitly dynamic.
+ambiguous, shadowed, resolved-internal, and dynamic outcomes. Attribute-chain
+calls remain unresolved unless stronger type or binding evidence becomes
+available.
+
+Dynamically computed targets remain explicitly uncertain, but the current
+Python evidence model now preserves several syntax- and binding-derived dynamic
+kinds: callback parameters, subscript-selected callables, `getattr` results,
+returned callables, and other dynamic targets. These classifications describe
+why a target is dynamic; they do not prove a concrete runtime callee.
 
 A potential internal call is not a confirmed call dependency. Python permits
 parameters, assignments, rebinding, closures, and other scope behaviour that can
@@ -276,6 +282,12 @@ nonlocal, free closure binding, or other local binding.
 These outcomes are recorded as `SHADOWED`. This improves false-positive
 rejection but still does not promote remaining `POTENTIAL_INTERNAL` candidates
 to confirmed call edges.
+
+A direct-name call through a function parameter is treated differently when no
+internal candidate exists. In that case the parameter is runtime-provided
+callable evidence and is retained as a dynamic `callback_parameter` call. If a
+same-file or imported internal candidate exists under that name, the parameter
+continues to be recorded as shadowing that candidate instead.
 
 The resolver now positively confirms a narrow first class of call targets:
 direct-name calls backed by one resolved internal `from ... import ...`

@@ -9,6 +9,7 @@ from project_sniffer.parsing.models import (
     SymbolKind,
     CallEvidence,
     CallTargetKind,
+    DynamicCallKind,
 )
 from project_sniffer.parsing.registry import (
     PARSER_DEFINITIONS,
@@ -29,4 +30,5 @@ __all__ = [
     "parse_source_evidence",
     "CallEvidence",
     "CallTargetKind",
+    "DynamicCallKind",
 ]

@@ -14,6 +14,7 @@ from project_sniffer.parsing.models import (
     SymbolKind,
     CallEvidence,
     CallTargetKind,
+    DynamicCallKind,
 )
 
 
@@ -51,6 +52,43 @@ def _static_call_target_parts(
         )
 
     return None
+
+def _dynamic_call_kind(
+    node: ast.AST,
+) -> DynamicCallKind:
+    if isinstance(
+        node,
+        ast.Subscript,
+    ):
+        return (
+            DynamicCallKind
+            .SUBSCRIPT_SELECTED
+        )
+
+    if isinstance(
+        node,
+        ast.Call,
+    ):
+        inner_target = (
+            _static_call_target_parts(
+                node.func
+            )
+        )
+
+        if inner_target == (
+            "getattr",
+        ):
+            return (
+                DynamicCallKind
+                .GETATTR_RESULT
+            )
+
+        return (
+            DynamicCallKind
+            .RETURNED_CALLABLE
+        )
+
+    return DynamicCallKind.OTHER
 
 
 class _PythonEvidenceVisitor(
@@ -167,10 +205,16 @@ class _PythonEvidenceVisitor(
                 node.func
             )
         )
+        dynamic_kind = None
 
         if target_parts is None:
             target_kind = (
                 CallTargetKind.DYNAMIC
+            )
+            dynamic_kind = (
+                _dynamic_call_kind(
+                    node.func
+                )
             )
             target_parts = ()
 
@@ -192,6 +236,7 @@ class _PythonEvidenceVisitor(
                 target_parts=target_parts,
                 scope=self.scope_name,
                 line=node.lineno,
+                dynamic_kind=dynamic_kind,
             )
         )
 

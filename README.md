@@ -130,6 +130,14 @@ The existing implementation can:
   provenance;
 - render confirmed caller-endpoint and callee-endpoint counts plus navigable
   forward and reverse call relationships through `--trace`.
+- classify dynamically computed Python call targets as callback-parameter,
+  subscript-selected, `getattr`-result, returned-callable, or other dynamic
+  evidence while preserving their uncertain status;
+- distinguish runtime callback parameters with no matching internal candidate
+  from parameters that actually shadow an internal call candidate;
+- render dynamic-call kinds through `--trace` without allowing those uncertain
+  relationships into confirmed `CALL` dependency edges or caller/callee
+  indexes.
 
 ## Language recognition
 

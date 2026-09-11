@@ -45,6 +45,13 @@ def _call_label(
         resolution.evidence.target_parts
     )
 
+def _dynamic_call_kind_label(
+    resolution: CallResolution,
+) -> str:
+    if resolution.dynamic_kind is None:
+        return "unknown"
+
+    return resolution.dynamic_kind.value
 
 def _call_candidate_label(
     resolution: CallResolution,
@@ -521,6 +528,8 @@ def render_dependency_graph(
                 "- "
                 f"`{resolution.source_path}`:"
                 f"{resolution.evidence.line} "
+                f"kind "
+                f"`{_dynamic_call_kind_label(resolution)}` "
                 f"(scope "
                 f"`{_scope_label(resolution.evidence.scope)}`)"
             )

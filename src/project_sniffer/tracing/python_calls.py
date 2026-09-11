@@ -13,6 +13,7 @@ from project_sniffer.indexing import (
 )
 from project_sniffer.parsing import (
     CallTargetKind,
+    DynamicCallKind,
 )
 from project_sniffer.tracing.models import (
     CallResolution,
@@ -476,6 +477,10 @@ def resolve_python_calls(
                         CallResolutionStatus
                         .DYNAMIC
                     ),
+                    dynamic_kind=(
+                        evidence.dynamic_kind
+                        or DynamicCallKind.OTHER
+                    ),
                 )
             )
 
@@ -611,6 +616,29 @@ def resolve_python_calls(
                 target_name,
             )
         )
+
+        if (
+            scope_symbol is not None
+            and scope_symbol.is_parameter()
+            and not same_file_candidates
+            and not imported_candidates
+        ):
+            resolutions.append(
+                CallResolution(
+                    source_path=source_path,
+                    evidence=evidence,
+                    status=(
+                        CallResolutionStatus
+                        .DYNAMIC
+                    ),
+                    dynamic_kind=(
+                        DynamicCallKind
+                        .CALLBACK_PARAMETER
+                    ),
+                )
+            )
+
+            continue
 
         shadowed_by = (
             _shadow_reason(

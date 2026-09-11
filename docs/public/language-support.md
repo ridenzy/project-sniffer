@@ -28,6 +28,12 @@ that has not been reassigned according to Python compiler symbol-table evidence.
 Other potential, shadowed, ambiguous, unresolved, and dynamic calls remain
 explicitly separate.
 
+Dynamic Python call evidence is additionally classified where deterministic
+syntax or compiler binding evidence permits it. Current dynamic kinds include
+callback parameters, subscript-selected callables, `getattr` results, returned
+callables, and other dynamic targets. These remain uncertain relationships and
+do not become confirmed `CALL` dependency edges.
+
 ## Recognition policy
 
 Project Sniffer prefers `UNKNOWN` over a confidently wrong classification.

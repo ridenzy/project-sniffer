@@ -13,6 +13,7 @@ from project_sniffer.parsing import (
     get_parser_definition,
     parse_source_evidence,
     CallTargetKind,
+    DynamicCallKind,
 )
 from project_sniffer.reading import (
     FileReadResult,
@@ -371,6 +372,49 @@ class ParsingTests(
                     "run",
                     4,
                 ),
+            ),
+        )
+
+        self.assertIs(
+            parsed.calls[2].dynamic_kind,
+            DynamicCallKind.SUBSCRIPT_SELECTED,
+        )
+
+    def test_python_dynamic_call_syntax_is_classified(
+        self,
+    ) -> None:
+        source = (
+            "def run(callbacks, service, name, factory):\n"
+            "    callbacks[0]()\n"
+            "    getattr(service, name)()\n"
+            "    factory()()\n"
+            "    (lambda: None)()\n"
+        )
+
+        parsed = parse_source_evidence(
+            self.evidence(
+                "src/example.py",
+                SourceLanguage.PYTHON,
+                source,
+            )
+        )
+
+        dynamic_kinds = tuple(
+            item.dynamic_kind
+            for item in parsed.calls
+            if (
+                item.target_kind
+                is CallTargetKind.DYNAMIC
+            )
+        )
+
+        self.assertEqual(
+            dynamic_kinds,
+            (
+                DynamicCallKind.SUBSCRIPT_SELECTED,
+                DynamicCallKind.GETATTR_RESULT,
+                DynamicCallKind.RETURNED_CALLABLE,
+                DynamicCallKind.OTHER,
             ),
         )
 
