@@ -68,6 +68,12 @@ The project is still in pre-1.0 development.
   enclosing parser scope.
 - Semantic project-index support for flattened call-site evidence without
   reopening target-project source files.
+- Conservative Python direct-name call-target candidate resolution against
+  same-file top-level symbols and already-resolved internal imported symbols.
+- Explicit potential-internal, unresolved, ambiguous, and dynamic Python
+  call-resolution outcomes.
+- Dependency-trace rendering for Python call candidates while keeping potential
+  call targets separate from confirmed dependency edges.
 
 ### Removed
 

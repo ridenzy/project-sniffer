@@ -4,7 +4,9 @@ from dataclasses import dataclass
 from enum import Enum
 
 from project_sniffer.parsing import (
+    CallEvidence,
     ImportEvidence,
+    SymbolKind,
 )
 
 
@@ -19,11 +21,51 @@ class ImportResolutionStatus(
         "invalid_relative_import"
     )
 
+
+class CallResolutionStatus(
+    str,
+    Enum,
+):
+    POTENTIAL_INTERNAL = "potential_internal"
+    UNRESOLVED = "unresolved"
+    AMBIGUOUS = "ambiguous"
+    DYNAMIC = "dynamic"
+
+
 class DependencyKind(
     str,
     Enum,
 ):
     IMPORT = "import"
+
+
+@dataclass(frozen=True)
+class ImportResolution:
+    source_path: str
+    evidence: ImportEvidence
+    requested_modules: tuple[str, ...]
+    status: ImportResolutionStatus
+    target_path: str | None = None
+    candidate_paths: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class CallTarget:
+    source_path: str
+    qualified_name: str
+    kind: SymbolKind
+    line: int
+
+
+@dataclass(frozen=True)
+class CallResolution:
+    source_path: str
+    evidence: CallEvidence
+    status: CallResolutionStatus
+    candidate_targets: tuple[
+        CallTarget,
+        ...,
+    ] = ()
 
 
 @dataclass(frozen=True)
@@ -43,16 +85,11 @@ class DependencyGraph:
         ImportResolution,
         ...,
     ]
+    call_resolutions: tuple[
+        CallResolution,
+        ...,
+    ]
     edges: tuple[
         DependencyEdge,
         ...,
     ]
-
-@dataclass(frozen=True)
-class ImportResolution:
-    source_path: str
-    evidence: ImportEvidence
-    requested_modules: tuple[str, ...]
-    status: ImportResolutionStatus
-    target_path: str | None = None
-    candidate_paths: tuple[str, ...] = ()

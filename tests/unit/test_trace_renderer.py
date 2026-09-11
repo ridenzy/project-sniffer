@@ -67,6 +67,9 @@ class TraceRendererTests(
                     (
                         "from .worker import Worker\n"
                         "import missing_dependency\n"
+                        "\n"
+                        "def build():\n"
+                        "    return Worker()\n"
                     ),
                 ),
                 self.evidence(
@@ -117,6 +120,24 @@ class TraceRendererTests(
 
         self.assertIn(
             "missing_dependency",
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "## Potential internal calls "
+                "(not confirmed edges)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            "pkg/worker.py::Worker",
+            rendered,
+        )
+
+        self.assertIn(
+            "- Potential internal calls: 1",
             rendered,
         )
 

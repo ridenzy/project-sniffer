@@ -20,7 +20,9 @@ Phase 2F-A implements levels 1 and 2. Phase 2F-B now provides level 3 for
 Python while the remaining registered languages are still recognition-only.
 
 Phase 2F-C now provides level-4 analyzer support for confirmed internal Python
-import dependencies through the initial `--trace` analyzer.
+import dependencies and conservative Python call-target candidate resolution
+through the initial `--trace` analyzer. Potential call targets are not confirmed
+call dependency edges.
 
 ## Recognition policy
 
@@ -160,11 +162,12 @@ All other registered languages currently remain recognition-only. Python
 parsing uses the standard-library AST and does not import or execute target
 modules.
 
-The initial `--trace` analyzer currently consumes confirmed internal Python
-import dependencies. Python call sites are now normalized parser evidence, but
-call-target resolution and call dependency edges are not implemented yet.
-Broader trace support for routes, APIs, file operations, exports, database
-usage, and additional languages remains future work.
+The initial `--trace` analyzer consumes confirmed internal Python import
+dependencies and conservative Python direct-name call-target candidates.
+Candidate call targets are rendered with explicit uncertainty and are not
+confirmed call dependency edges. Attribute-chain and dynamic-call resolution,
+stronger binding proof, routes, APIs, file operations, exports, database usage,
+and additional languages remain later stages.
 
 ## Future detection layers
 

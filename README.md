@@ -105,6 +105,12 @@ The existing implementation can:
   confirmed internal Python import-resolution evidence;
 - normalize Python call sites into direct-name, attribute-chain, and dynamic
   evidence while preserving source line and enclosing parser scope;
+- resolve conservative Python direct-name call candidates against same-file
+  top-level symbols and already-resolved internal imported symbols;
+- preserve potential-internal, unresolved, ambiguous, and dynamic call outcomes
+  rather than presenting uncertain calls as confirmed relationships;
+- render call-resolution evidence through `--trace` while keeping potential
+  call targets separate from confirmed dependency edges;
 
 ## Language recognition
 

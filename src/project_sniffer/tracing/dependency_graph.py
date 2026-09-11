@@ -9,6 +9,9 @@ from project_sniffer.tracing.models import (
     DependencyKind,
     ImportResolutionStatus,
 )
+from project_sniffer.tracing.python_calls import (
+    resolve_python_calls,
+)
 from project_sniffer.tracing.python_imports import (
     resolve_python_imports,
 )
@@ -37,6 +40,13 @@ def build_dependency_graph(
         )
     )
 
+    call_resolutions = (
+        resolve_python_calls(
+            index,
+            import_resolutions,
+        )
+    )
+
     edges: list[
         DependencyEdge
     ] = []
@@ -44,29 +54,49 @@ def build_dependency_graph(
     for resolution in import_resolutions:
         if (
             resolution.status
-            is not ImportResolutionStatus.RESOLVED_INTERNAL
+            is not (
+                ImportResolutionStatus
+                .RESOLVED_INTERNAL
+            )
         ):
             continue
 
-        target_path = resolution.target_path
+        target_path = (
+            resolution.target_path
+        )
 
         if target_path is None:
             continue
 
         edges.append(
             DependencyEdge(
-                source_path=resolution.source_path,
+                source_path=(
+                    resolution.source_path
+                ),
                 target_path=target_path,
                 kind=DependencyKind.IMPORT,
-                line=resolution.evidence.line,
-                scope=resolution.evidence.scope,
+                line=(
+                    resolution
+                    .evidence
+                    .line
+                ),
+                scope=(
+                    resolution
+                    .evidence
+                    .scope
+                ),
                 resolution=resolution,
             )
         )
 
     return DependencyGraph(
         nodes=nodes,
-        import_resolutions=import_resolutions,
+        import_resolutions=(
+            import_resolutions
+        ),
+        call_resolutions=(
+            call_resolutions
+        ),
         edges=tuple(
             edges
         ),

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from project_sniffer.tracing.models import (
+    CallResolution,
+    CallResolutionStatus,
     DependencyGraph,
     ImportResolution,
     ImportResolutionStatus,
 )
-
 
 def _requested_label(
     resolution: ImportResolution,
@@ -27,6 +28,42 @@ def _candidate_label(
     return ", ".join(
         resolution.candidate_paths
     )
+
+
+def _call_label(
+    resolution: CallResolution,
+) -> str:
+    if not resolution.evidence.target_parts:
+        return "<dynamic>"
+
+    return ".".join(
+        resolution.evidence.target_parts
+    )
+
+
+def _call_candidate_label(
+    resolution: CallResolution,
+) -> str:
+    if not resolution.candidate_targets:
+        return "<none>"
+
+    return ", ".join(
+        (
+            f"{target.source_path}"
+            f"::{target.qualified_name}"
+        )
+        for target
+        in resolution.candidate_targets
+    )
+
+
+def _scope_label(
+    scope: str | None,
+) -> str:
+    if scope is None:
+        return "<module>"
+
+    return scope
 
 
 def render_dependency_graph(
@@ -68,6 +105,45 @@ def render_dependency_graph(
         )
     )
 
+    potential_calls = tuple(
+        item
+        for item in graph.call_resolutions
+        if (
+            item.status
+            is (
+                CallResolutionStatus
+                .POTENTIAL_INTERNAL
+            )
+        )
+    )
+
+    unresolved_calls = tuple(
+        item
+        for item in graph.call_resolutions
+        if (
+            item.status
+            is CallResolutionStatus.UNRESOLVED
+        )
+    )
+
+    ambiguous_calls = tuple(
+        item
+        for item in graph.call_resolutions
+        if (
+            item.status
+            is CallResolutionStatus.AMBIGUOUS
+        )
+    )
+
+    dynamic_calls = tuple(
+        item
+        for item in graph.call_resolutions
+        if (
+            item.status
+            is CallResolutionStatus.DYNAMIC
+        )
+    )
+
     lines = [
         "# Dependency Trace",
         "",
@@ -75,11 +151,28 @@ def render_dependency_graph(
         "",
         f"- Source nodes: {len(graph.nodes)}",
         f"- Import resolutions: {len(graph.import_resolutions)}",
+        f"- Call resolutions: {len(graph.call_resolutions)}",
         f"- Confirmed internal edges: {len(graph.edges)}",
         f"- Resolved internal imports: {len(resolved)}",
         f"- Unresolved imports: {len(unresolved)}",
         f"- Ambiguous imports: {len(ambiguous)}",
         f"- Invalid relative imports: {len(invalid_relative)}",
+        (
+            "- Potential internal calls: "
+            f"{len(potential_calls)}"
+        ),
+        (
+            "- Unresolved calls: "
+            f"{len(unresolved_calls)}"
+        ),
+        (
+            "- Ambiguous calls: "
+            f"{len(ambiguous_calls)}"
+        ),
+        (
+            "- Dynamic calls: "
+            f"{len(dynamic_calls)}"
+        ),
         "",
         "## Confirmed internal dependencies",
         "",
@@ -164,6 +257,103 @@ def render_dependency_graph(
                 "- "
                 f"`{resolution.source_path}`:"
                 f"{resolution.evidence.line}"
+            )
+    else:
+        lines.append(
+            "- None."
+        )
+
+
+    lines.extend(
+        [
+            "",
+            (
+                "## Potential internal calls "
+                "(not confirmed edges)"
+            ),
+            "",
+        ]
+    )
+
+    if potential_calls:
+        for resolution in potential_calls:
+            lines.append(
+                "- "
+                f"`{resolution.source_path}`:"
+                f"{resolution.evidence.line} "
+                f"`{_call_label(resolution)}` "
+                "→ candidate "
+                f"`{_call_candidate_label(resolution)}` "
+                f"(scope "
+                f"`{_scope_label(resolution.evidence.scope)}`)"
+            )
+    else:
+        lines.append(
+            "- None."
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Unresolved calls",
+            "",
+        ]
+    )
+
+    if unresolved_calls:
+        for resolution in unresolved_calls:
+            lines.append(
+                "- "
+                f"`{resolution.source_path}`:"
+                f"{resolution.evidence.line} "
+                f"`{_call_label(resolution)}` "
+                f"(scope "
+                f"`{_scope_label(resolution.evidence.scope)}`)"
+            )
+    else:
+        lines.append(
+            "- None."
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Ambiguous call candidates",
+            "",
+        ]
+    )
+
+    if ambiguous_calls:
+        for resolution in ambiguous_calls:
+            lines.append(
+                "- "
+                f"`{resolution.source_path}`:"
+                f"{resolution.evidence.line} "
+                f"`{_call_label(resolution)}`; "
+                "candidates: "
+                f"`{_call_candidate_label(resolution)}`"
+            )
+    else:
+        lines.append(
+            "- None."
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Dynamic calls",
+            "",
+        ]
+    )
+
+    if dynamic_calls:
+        for resolution in dynamic_calls:
+            lines.append(
+                "- "
+                f"`{resolution.source_path}`:"
+                f"{resolution.evidence.line} "
+                f"(scope "
+                f"`{_scope_label(resolution.evidence.scope)}`)"
             )
     else:
         lines.append(

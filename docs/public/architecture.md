@@ -208,10 +208,12 @@ Those indexed records retain their original parser evidence and source path,
 providing project-wide semantic evidence without another filesystem walk,
 without reopening source files, and without executing target-project code.
 
-The index is an evidence layer rather than a dependency resolver. Import-target
-resolution and confirmed import dependency edges are now consumed by the initial
-`--trace` analyzer. Call relationships and broader analyzer evidence remain
-later stages.
+The index is an evidence layer rather than a dependency resolver. Python import
+resolution and conservative Python call-candidate resolution consume the shared
+index. The initial `--trace` analyzer renders both evidence classes, but only
+confirmed internal import resolutions currently become dependency edges.
+Potential call targets remain explicit evidence and are not promoted to
+confirmed call relationships.
 
 ## Python import resolution
 
@@ -238,18 +240,41 @@ renderer and public `--trace` analyzer consume that graph. Current confirmed
 trace edges cover Python import dependencies; broader trace evidence remains a
 later development stage.
 
+## Python call candidate resolution
+
+`project_sniffer.tracing.python_calls` consumes the shared
+`SemanticProjectIndex` together with the existing Python import resolutions.
+
+The current resolver handles direct-name calls conservatively. It can identify
+candidate same-file top-level symbols and candidate symbols reached through an
+already-resolved internal `from ... import ...` binding, including imported
+aliases.
+
+Call resolution currently distinguishes potential internal, unresolved,
+ambiguous, and dynamic outcomes. Attribute-chain calls remain unresolved unless
+stronger type or binding evidence becomes available, and dynamically computed
+call targets remain explicitly dynamic.
+
+A potential internal call is not a confirmed call dependency. Python permits
+parameters, assignments, rebinding, closures, and other scope behaviour that can
+shadow an apparently matching symbol. Binding and shadowing analysis is therefore
+required before potential call candidates can safely become confirmed call
+edges.
+
 ## Dependency graph
 
 `project_sniffer.tracing.dependency_graph` converts confirmed internal import
 resolutions into immutable dependency edges.
 
 Every parsed source path remains represented as a graph node, including files
-that have no dependency edges. The graph also retains the complete import
-resolution collection so unresolved, ambiguous, and invalid relative imports
-remain visible evidence.
+that have no dependency edges. The graph retains the complete import-resolution
+and call-resolution collections so uncertain semantic evidence remains visible
+without being converted into confirmed relationships.
 
-Only `RESOLVED_INTERNAL` imports become dependency edges. Unresolved,
-ambiguous, or invalid imports never become inferred relationships.
+Only `RESOLVED_INTERNAL` imports currently become dependency edges. Unresolved,
+ambiguous, or invalid imports never become inferred relationships, and
+`POTENTIAL_INTERNAL` calls remain call-resolution evidence rather than confirmed
+call edges.
 
 Each import dependency edge retains its source path, target path, source line,
 enclosing parser scope, and original `ImportResolution` evidence.

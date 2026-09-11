@@ -21,6 +21,7 @@ from project_sniffer.tracing import (
     DependencyKind,
     ImportResolutionStatus,
     build_dependency_graph,
+    CallResolutionStatus,
 )
 
 
@@ -105,6 +106,21 @@ class DependencyGraphTests(
                 graph.import_resolutions
             ),
             1,
+        )
+
+        self.assertEqual(
+            len(
+                graph.call_resolutions
+            ),
+            1,
+        )
+
+        self.assertIs(
+            graph.call_resolutions[0].status,
+            (
+                CallResolutionStatus
+                .POTENTIAL_INTERNAL
+            ),
         )
 
         self.assertEqual(

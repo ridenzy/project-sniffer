@@ -245,6 +245,16 @@ class LanguageRegistryTests(
             documentation,
         )
 
+        self.assertIn(
+            "call-target candidate resolution",
+            documentation,
+        )
+
+        self.assertIn(
+            "confirmed call dependency edges",
+            documentation,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
