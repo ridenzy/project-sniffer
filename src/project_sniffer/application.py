@@ -17,6 +17,9 @@ from project_sniffer.docs_exporter import (
 from project_sniffer.evidence import (
     build_source_evidence,
 )
+from project_sniffer.indexing import (
+    build_semantic_project_index,
+)
 from project_sniffer.reading import (
     read_manifest_files,
 )
@@ -26,6 +29,10 @@ from project_sniffer.report_builder import (
 from project_sniffer.scanning import (
     ScanError,
     scan_project,
+)
+from project_sniffer.tracing import (
+    build_dependency_graph,
+    render_dependency_graph,
 )
 
 
@@ -103,6 +110,7 @@ def run_analysis(
     project_value: str,
     architecture_requested: bool,
     report_requested: bool,
+    trace_requested: bool,
     docs_requested: bool,
     output_value: str | None,
     working_directory: Path,
@@ -223,6 +231,32 @@ def run_analysis(
         )
         return OUTPUT_ERROR
 
+    source_evidence = ()
+
+    if (
+        report_requested
+        or trace_requested
+    ):
+        try:
+            read_results = read_manifest_files(
+                manifest
+            )
+
+            source_evidence = (
+                build_source_evidence(
+                    read_results
+                )
+            )
+
+        except OSError as error:
+            print(
+                "Error: could not prepare "
+                "source evidence: "
+                f"{error}",
+                file=sys.stderr,
+            )
+            return OUTPUT_ERROR
+
     if architecture_requested:
         architecture_output = (
             output_directory
@@ -275,16 +309,6 @@ def run_analysis(
         )
 
         try:
-            read_results = read_manifest_files(
-                manifest
-            )
-
-            source_evidence = (
-                build_source_evidence(
-                    read_results
-                )
-            )
-
             build_report(
                 project_path=project_path,
                 source_evidence=source_evidence,
@@ -301,6 +325,57 @@ def run_analysis(
         print(
             "Project report written to: "
             f"{report_output}"
+        )
+
+    if trace_requested:
+        trace_output = (
+            output_directory
+            / (
+                f"{project_name}"
+                "-trace.md"
+            )
+        )
+
+        print(
+            "\nGenerating dependency trace..."
+        )
+
+        semantic_index = (
+            build_semantic_project_index(
+                source_evidence
+            )
+        )
+
+        dependency_graph = (
+            build_dependency_graph(
+                semantic_index
+            )
+        )
+
+        trace_text = (
+            render_dependency_graph(
+                dependency_graph
+            )
+        )
+
+        try:
+            trace_output.write_text(
+                trace_text,
+                encoding="utf-8",
+                newline="\n",
+            )
+        except OSError as error:
+            print(
+                "Error: could not write "
+                "dependency trace: "
+                f"{error}",
+                file=sys.stderr,
+            )
+            return OUTPUT_ERROR
+
+        print(
+            "Dependency trace written to: "
+            f"{trace_output}"
         )
 
     if docs_requested:

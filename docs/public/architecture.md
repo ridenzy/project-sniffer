@@ -29,9 +29,9 @@ sniff
              +-- project_sniffer.docs_exporter
 ```
 
-The packaged analyzers currently support `--architecture` and `--report`.
-`--docs` is additionally available as a separate output capability for
-copying manifest-approved root-level `docs/public/**` content.
+The packaged analyzers currently support `--architecture`, `--report`, and
+`--trace`. `--docs` is additionally available as a separate output capability
+for copying manifest-approved root-level `docs/public/**` content.
 
 The package also contains its recommended ignore configuration as a packaged
 resource.
@@ -44,11 +44,11 @@ Git-ignored and excluded from package data.
 The root-level `main.py` remains available as a positional compatibility entry
 point and delegates to `project_sniffer.application`.
 
-The packaged architecture and source-report analyzers, including the root
-compatibility entry point, consume the same configuration, shared scanner,
-single scan manifest, safe-reader boundary, architecture builder, and
-source-report builder. Obsolete parallel flat runtime implementations have been
-removed so `src/project_sniffer/` is the single runtime authority.
+The packaged analyzers and root compatibility entry point consume the same
+configuration, shared scanner, and single scan manifest. Source-report and trace
+analysis also share the safe-reader and `SourceEvidence` path. Obsolete parallel
+flat runtime implementations have been removed so `src/project_sniffer/` is the
+single runtime authority.
 
 ## Existing behavior to preserve
 
@@ -129,23 +129,26 @@ Canonical ScanManifest
     |                                                                       |
     |                                                                       +-- DependencyGraph
     |                                                                           |
-    |                                                                           +-- requested analyzers
-    |
+    |                                                                           +-- trace renderer
+    |                                                                               |
+    |                                                                               +-- --trace
     +-- --docs raw-byte export
             |
             +-- generated docs/public snapshot
 ```
 
-Architecture generation, source-report generation, and `--docs` all consume
-the same shared scan manifest and do not introduce separate filesystem
-discovery walks.
+Architecture generation, source-report generation, dependency-trace generation,
+and `--docs` all consume the same shared scan manifest and do not introduce
+separate filesystem discovery walks.
 
-The source-report path passes discovered files through `project_sniffer.reading`
-before Markdown rendering. The reader returns immutable `FileReadResult`
-evidence, rejects paths outside the resolved project root or inconsistent with
-the manifest, and does not follow discovered file symlinks for source content.
-Binary, oversized, unreadable, ordinary-symlink, and escaped-symlink outcomes
-are classified before `project_sniffer.report_builder` receives any source text.
+The source-report and trace paths pass discovered files through
+`project_sniffer.reading` before Markdown rendering or semantic analysis. The
+reader returns immutable `FileReadResult` evidence, rejects paths outside the
+resolved project root or inconsistent with the manifest, and does not follow
+discovered file symlinks for source content. Binary, oversized, unreadable,
+ordinary-symlink, and escaped-symlink outcomes are classified before the report
+builder or semantic-analysis pipeline receives source text.
+
 The reader applies an 8 MiB default per-file source-read ceiling and rejects
 non-regular filesystem entries before source content is opened.
 
@@ -203,8 +206,9 @@ providing project-wide semantic evidence without another filesystem walk,
 without reopening source files, and without executing target-project code.
 
 The index is an evidence layer rather than a dependency resolver. Import-target
-resolution, dependency edges, call relationships, and analyzer output remain
-separate later stages.
+resolution and confirmed import dependency edges are now consumed by the initial
+`--trace` analyzer. Call relationships and broader analyzer evidence remain
+later stages.
 
 ## Python import resolution
 
@@ -226,8 +230,10 @@ The current path policy recognizes modules rooted directly in the project and
 the conventional top-level `src/` Python source layout. Additional source-root
 discovery from packaging metadata remains future work.
 
-Import resolution is still evidence rather than the public `--trace` analyzer.
-Dependency graph construction and trace rendering remain later stages.
+Import resolution feeds dependency-graph construction. The initial trace
+renderer and public `--trace` analyzer consume that graph. Current confirmed
+trace edges cover Python import dependencies; broader trace evidence remains a
+later development stage.
 
 ## Dependency graph
 
@@ -245,8 +251,9 @@ ambiguous, or invalid imports never become inferred relationships.
 Each import dependency edge retains its source path, target path, source line,
 enclosing parser scope, and original `ImportResolution` evidence.
 
-The dependency graph is still an internal semantic-analysis layer. Trace
-rendering and the public `--trace` analyzer remain separate later stages.
+The dependency graph remains an internal semantic-analysis layer, but it is now
+consumed by the trace renderer and the public `--trace` analyzer. Broader trace
+relationships remain later stages.
 
 ## Core safety model
 

@@ -54,6 +54,7 @@ def main(
         project_value=arguments[0],
         architecture_requested=True,
         report_requested=True,
+        trace_requested=False,
         docs_requested=False,
         output_value=None,
         working_directory=Path.cwd(),

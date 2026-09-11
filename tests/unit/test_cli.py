@@ -25,6 +25,7 @@ class ProjectSnifferCliTests(
             "--project",
             "--architecture",
             "--report",
+            "--trace",
             "--docs",
             "--output",
             "implemented analyzers",

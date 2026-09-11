@@ -29,10 +29,11 @@ The current packaged CLI supports:
 sniff --project /path/to/project --architecture
 sniff --project /path/to/project --report
 sniff --project /path/to/project --docs
-sniff --project /path/to/project --architecture --report --docs
+sniff --project /path/to/project --architecture --report --trace --docs
+sniff --project /path/to/project --trace
 ```
 
-`--architecture` and `--report` are analyzers. `--docs` is an output
+`--architecture` and `--report` and `--trace` are analyzers. `--docs` is an output
 capability and must remain separate from the stable analyzer set.
 
 Reports are grouped by scanned project:
@@ -123,13 +124,13 @@ Changes that affect scanning, report generation, or documentation export
 should also be exercised against a synthetic disposable project rather than
 against private production repositories.
 
-The packaged architecture analyzer, source-report analyzer, and `--docs`
-output capability share one scan manifest. New analyzer or output code must
+The packaged architecture analyzer, source-report analyzer, `--trace` analyzer,
+and `--docs` output capability share one scan manifest. New analyzer or output code must
 consume that shared discovery evidence rather than introducing another
 independent project walk.
 
-Source-report consumers must not reopen target-project source files directly.
-Source text must pass through `project_sniffer.reading` so filesystem
+Source-text analyzer consumers must not reopen target-project source files
+directly. Source text must pass through `project_sniffer.reading` so filesystem
 containment, file-symlink handling, binary classification, oversized-file
 classification, non-regular-file refusal, unreadable-file classification, and
 control-character cleaning remain centralized.

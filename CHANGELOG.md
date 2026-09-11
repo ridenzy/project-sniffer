@@ -59,6 +59,10 @@ The project is still in pre-1.0 development.
   import resolutions while retaining unresolved and ambiguous import evidence.
 - Source-file, line, and enclosing-scope provenance on confirmed import
   dependency edges.
+- Initial `--trace` CLI analyzer producing a deterministic Markdown dependency
+  trace from confirmed internal Python import evidence.
+- Shared source-evidence preparation for combined `--report` and `--trace`
+  execution so target-project files are not read twice.
 
 ### Removed
 

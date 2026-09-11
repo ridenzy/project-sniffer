@@ -17,11 +17,12 @@ Implemented operations include:
 ```bash
 sniff --project /path/to/project --architecture
 sniff --project /path/to/project --report
+sniff --project /path/to/project --trace
 sniff --project /path/to/project --docs
-sniff --project /path/to/project --architecture --report --docs
+sniff --project /path/to/project --architecture --report --trace --docs
 ```
 
-`--architecture` and `--report` are analyzers. `--docs` is an output
+`--architecture`, `--report`, and `--trace` are analyzers. `--docs` is an output
 capability that copies manifest-approved root-level `docs/public/**`
 content alongside generated Project Sniffer evidence.
 
@@ -31,6 +32,7 @@ Default output is grouped by scanned project:
 reports/<project-name>/
 ├── <project-name>-architecture.md
 ├── <project-name>-project-report.md
+├── <project-name>-trace.md
 └── docs/
     └── public/
         └── ...
@@ -49,8 +51,8 @@ PATH/<project-name>/<files>
 
 The root-level `main.py` remains available as a positional compatibility entry
 point and delegates to the packaged runtime used by `sniff`. It preserves the
-original architecture-plus-report behavior; `--docs` is selected explicitly
-through the installed CLI.
+original architecture-plus-report behavior; `--trace` and `--docs` are selected
+explicitly through the installed CLI.
 
 ## Current capabilities
 
@@ -98,6 +100,8 @@ The existing implementation can:
   for relationships supported by deterministic internal evidence;
 - retain source path, target path, source line, and enclosing scope on import
   dependency edges;
+- render the initial dependency trace from the shared semantic index and
+  confirmed internal Python import-resolution evidence;
 
 ## Language recognition
 

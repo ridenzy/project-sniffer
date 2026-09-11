@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from project_sniffer.cli import main
+import project_sniffer.application as application
 
 
 class ProjectSnifferAnalysisCliTests(
@@ -786,6 +787,164 @@ class ProjectSnifferAnalysisCliTests(
             report_text,
         )
 
+    def test_trace_only_generates_dependency_trace(
+        self,
+    ) -> None:
+        source = (
+            self.project
+            / "src"
+        )
 
+        (
+            source
+            / "helper.py"
+        ).write_text(
+            (
+                "def work():\n"
+                "    return True\n"
+            ),
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        (
+            source
+            / "app.py"
+        ).write_text(
+            (
+                "from helper import work\n"
+                "\n"
+                "def run():\n"
+                "    return work()\n"
+            ),
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        output_base = (
+            self.workspace
+            / "trace-output"
+        )
+
+        status = main(
+            [
+                "--project",
+                str(
+                    self.project
+                ),
+                "--trace",
+                "--output",
+                str(
+                    output_base
+                ),
+            ]
+        )
+
+        self.assertEqual(
+            status,
+            0,
+        )
+
+        report_directory = (
+            output_base
+            / "fixture-project"
+        )
+
+        trace_path = (
+            report_directory
+            / "fixture-project-trace.md"
+        )
+
+        self.assertTrue(
+            trace_path.is_file()
+        )
+
+        trace_text = trace_path.read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "# Dependency Trace",
+            trace_text,
+        )
+
+        self.assertIn(
+            (
+                "`src/app.py` "
+                "→ `src/helper.py`"
+            ),
+            trace_text,
+        )
+
+        self.assertFalse(
+            (
+                report_directory
+                / "fixture-project-project-report.md"
+            ).exists()
+        )
+
+        self.assertFalse(
+            (
+                report_directory
+                / "fixture-project-architecture.md"
+            ).exists()
+        )
+
+    def test_report_and_trace_share_one_source_read(
+        self,
+    ) -> None:
+        output_base = (
+            self.workspace
+            / "shared-evidence-output"
+        )
+
+        with patch.object(
+            application,
+            "read_manifest_files",
+            wraps=application.read_manifest_files,
+        ) as reader:
+            status = main(
+                [
+                    "--project",
+                    str(
+                        self.project
+                    ),
+                    "--report",
+                    "--trace",
+                    "--output",
+                    str(
+                        output_base
+                    ),
+                ]
+            )
+
+        self.assertEqual(
+            status,
+            0,
+        )
+
+        self.assertEqual(
+            reader.call_count,
+            1,
+        )
+
+        report_directory = (
+            output_base
+            / "fixture-project"
+        )
+
+        self.assertTrue(
+            (
+                report_directory
+                / "fixture-project-project-report.md"
+            ).is_file()
+        )
+
+        self.assertTrue(
+            (
+                report_directory
+                / "fixture-project-trace.md"
+            ).is_file()
+        )
 if __name__ == "__main__":
     unittest.main()

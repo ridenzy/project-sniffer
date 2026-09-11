@@ -26,9 +26,10 @@ Examples:
   sniff --project ./frontend --docs
   sniff --project ./frontend --architecture --report --docs
   sniff --project ./frontend --architecture --output ./analysis
+  sniff --project ./frontend --trace
+  sniff --project ./frontend --report --trace
 
 Still planned for later phases:
-  --trace
   --secret
   --database
   --all
@@ -121,6 +122,16 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    analyzers.add_argument(
+        "--trace",
+        action="store_true",
+        help=(
+            "Generate the current dependency "
+            "trace from supported semantic "
+            "evidence."
+        ),
+    )
+
     outputs = (
         parser.add_argument_group(
             "output capabilities"
@@ -164,6 +175,7 @@ def main(
     requested_operation = (
         args.architecture
         or args.report
+        or args.trace
         or args.docs
     )
 
@@ -185,7 +197,7 @@ def main(
         parser.error(
             "select at least one implemented "
             "operation: --architecture, --report, "
-            "or --docs"
+            "--trace, or --docs"
         )
 
     return run_analysis(
@@ -194,6 +206,7 @@ def main(
             args.architecture
         ),
         report_requested=args.report,
+        trace_requested=args.trace,
         docs_requested=args.docs,
         output_value=args.output,
         working_directory=Path.cwd(),

@@ -19,6 +19,9 @@ The capability levels are:
 Phase 2F-A implements levels 1 and 2. Phase 2F-B now provides level 3 for
 Python while the remaining registered languages are still recognition-only.
 
+Phase 2F-C now provides level-4 analyzer support for confirmed internal Python
+import dependencies through the initial `--trace` analyzer.
+
 ## Recognition policy
 
 Project Sniffer prefers `UNKNOWN` over a confidently wrong classification.
@@ -149,8 +152,12 @@ Parser support is tracked separately from path recognition.
 
 All other registered languages currently remain recognition-only. Python
 parsing uses the standard-library AST and does not import or execute target
-modules. Analyzer support remains a separate capability level; `--trace`
-has not yet been wired to consume this parser evidence.
+modules.
+
+The initial `--trace` analyzer consumes Python parser evidence for confirmed
+internal import dependencies. Broader trace support for calls, routes, APIs,
+file operations, exports, database usage, and additional languages remains
+future work.
 
 ## Future detection layers
 
