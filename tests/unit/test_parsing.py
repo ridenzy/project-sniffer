@@ -12,6 +12,7 @@ from project_sniffer.parsing import (
     SymbolKind,
     get_parser_definition,
     parse_source_evidence,
+    CallTargetKind,
 )
 from project_sniffer.reading import (
     FileReadResult,
@@ -308,6 +309,67 @@ class ParsingTests(
                     "main",
                     SymbolKind.ASYNC_FUNCTION,
                     10,
+                ),
+            ),
+        )
+
+    def test_python_calls_are_normalized_without_resolution(
+        self,
+    ) -> None:
+        source = (
+            "def run(callbacks, service):\n"
+            "    local()\n"
+            "    service.execute()\n"
+            "    callbacks[0]()\n"
+        )
+
+        evidence = self.evidence(
+            "src/example.py",
+            SourceLanguage.PYTHON,
+            source,
+        )
+
+        parsed = (
+            parse_source_evidence(
+                evidence
+            )
+        )
+
+        calls = tuple(
+            (
+                item.target_kind,
+                item.target_parts,
+                item.scope,
+                item.line,
+            )
+            for item in parsed.calls
+        )
+
+        self.assertEqual(
+            calls,
+            (
+                (
+                    CallTargetKind.NAME,
+                    (
+                        "local",
+                    ),
+                    "run",
+                    2,
+                ),
+                (
+                    CallTargetKind.ATTRIBUTE,
+                    (
+                        "service",
+                        "execute",
+                    ),
+                    "run",
+                    3,
+                ),
+                (
+                    CallTargetKind.DYNAMIC,
+                    (),
+                    "run",
+                    4,
                 ),
             ),
         )

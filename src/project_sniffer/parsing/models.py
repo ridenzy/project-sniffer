@@ -21,6 +21,11 @@ class SymbolKind(str, Enum):
     FUNCTION = "function"
     ASYNC_FUNCTION = "async_function"
 
+class CallTargetKind(str, Enum):
+    NAME = "name"
+    ATTRIBUTE = "attribute"
+    DYNAMIC = "dynamic"
+
 
 @dataclass(frozen=True)
 class ImportEvidence:
@@ -40,6 +45,12 @@ class SymbolEvidence:
     line: int
     end_line: int | None
 
+@dataclass(frozen=True)
+class CallEvidence:
+    target_kind: CallTargetKind
+    target_parts: tuple[str, ...]
+    scope: str | None
+    line: int
 
 @dataclass(frozen=True)
 class ParsedSource:
@@ -48,6 +59,7 @@ class ParsedSource:
     parser_id: str | None
     imports: tuple[ImportEvidence, ...] = ()
     symbols: tuple[SymbolEvidence, ...] = ()
+    calls: tuple[CallEvidence, ...] = ()
     error_type: str | None = None
     error_message: str | None = None
     error_line: int | None = None

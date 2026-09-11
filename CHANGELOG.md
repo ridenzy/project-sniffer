@@ -63,6 +63,11 @@ The project is still in pre-1.0 development.
   trace from confirmed internal Python import evidence.
 - Shared source-evidence preparation for combined `--report` and `--trace`
   execution so target-project files are not read twice.
+- Normalized Python call-site evidence distinguishing direct-name,
+  attribute-chain, and dynamic call targets while preserving source line and
+  enclosing parser scope.
+- Semantic project-index support for flattened call-site evidence without
+  reopening target-project source files.
 
 ### Removed
 

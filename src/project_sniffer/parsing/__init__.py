@@ -7,6 +7,8 @@ from project_sniffer.parsing.models import (
     ParseStatus,
     SymbolEvidence,
     SymbolKind,
+    CallEvidence,
+    CallTargetKind,
 )
 from project_sniffer.parsing.registry import (
     PARSER_DEFINITIONS,
@@ -25,4 +27,6 @@ __all__ = [
     "SymbolKind",
     "get_parser_definition",
     "parse_source_evidence",
+    "CallEvidence",
+    "CallTargetKind",
 ]

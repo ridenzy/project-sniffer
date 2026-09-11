@@ -182,13 +182,16 @@ See `language-support.md` for the current registry.
 
 ## Semantic parsing
 
+`project_sniffer.parsing` normalizes import statements, call sites, and class, function, and async-function symbols.
+
 `project_sniffer.parsing` consumes existing `SourceEvidence`; it does not
 perform filesystem discovery or reopen target-project files.
 
 The parser registry currently supports Python through the standard-library
 `ast` parser identified as `python-stdlib-ast`. The parser normalizes import
-statements and class, function, and async-function symbols. Unsupported
-languages and non-text or invalid evidence remain explicit parse outcomes.
+statements, call sites, and class, function, and async-function symbols.
+
+Unsupported languages and non-text or invalid evidence remain explicit parse outcomes.
 Syntax errors are recorded as parser evidence rather than causing target code
 to execute or the scan pipeline to fail.
 
@@ -199,7 +202,7 @@ dispatcher and constructs one immutable `SemanticProjectIndex`.
 
 The index retains every `ParsedSource`, including unsupported-language,
 non-text, invalid-text, and syntax-error outcomes. Only successfully parsed
-sources contribute flattened `IndexedImport` and `IndexedSymbol` records.
+sources contribute flattened IndexedImport, IndexedSymbol, and IndexedCall records.
 
 Those indexed records retain their original parser evidence and source path,
 providing project-wide semantic evidence without another filesystem walk,

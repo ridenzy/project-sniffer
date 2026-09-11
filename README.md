@@ -82,12 +82,13 @@ The existing implementation can:
   documentation languages from conservative path evidence;
 - preserve ambiguous source extensions as `UNKNOWN` rather than guessing;
 - route readable source evidence through a semantic parser registry without reopening target-project files;
-- parse Python source with the standard-library `ast` module into normalized imports and class, function, and async-function symbol evidence;
+- parse Python source with the standard-library `ast` module into normalized
+  imports, call sites, and class, function, and async-function symbol evidence;
 - represent unsupported languages, non-text evidence, invalid text evidence, and Python syntax failures through explicit parse statuses;
 - build a shared `SemanticProjectIndex` across parsed project sources while
   retaining original parse outcomes and source-file provenance;
-- flatten successful parser imports and symbols into reusable project-wide
-  evidence without reopening target-project files;
+- flatten successful parser imports, symbols, and call sites into reusable
+  project-wide evidence without reopening target-project files;
 - resolve Python import evidence against scanned project files without importing
   or executing target modules;
 - preserve unresolved, ambiguous, and invalid relative imports explicitly rather
@@ -102,6 +103,8 @@ The existing implementation can:
   dependency edges;
 - render the initial dependency trace from the shared semantic index and
   confirmed internal Python import-resolution evidence;
+- normalize Python call sites into direct-name, attribute-chain, and dynamic
+  evidence while preserving source line and enclosing parser scope;
 
 ## Language recognition
 

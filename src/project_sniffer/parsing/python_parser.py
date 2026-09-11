@@ -12,10 +12,45 @@ from project_sniffer.parsing.models import (
     ParseStatus,
     SymbolEvidence,
     SymbolKind,
+    CallEvidence,
+    CallTargetKind,
 )
 
 
 PYTHON_AST_PARSER_ID = "python-stdlib-ast"
+
+
+
+def _static_call_target_parts(
+    node: ast.AST,
+) -> tuple[str, ...] | None:
+    if isinstance(
+        node,
+        ast.Name,
+    ):
+        return (
+            node.id,
+        )
+
+    if isinstance(
+        node,
+        ast.Attribute,
+    ):
+        parent = (
+            _static_call_target_parts(
+                node.value
+            )
+        )
+
+        if parent is None:
+            return None
+
+        return (
+            *parent,
+            node.attr,
+        )
+
+    return None
 
 
 class _PythonEvidenceVisitor(
@@ -30,6 +65,10 @@ class _PythonEvidenceVisitor(
 
         self.symbols: list[
             SymbolEvidence
+        ] = []
+
+        self.calls: list[
+            CallEvidence
         ] = []
 
         self._scope: list[str] = []
@@ -118,6 +157,47 @@ class _PythonEvidenceVisitor(
                     line=node.lineno,
                 )
             )
+
+    def visit_Call(
+        self,
+        node: ast.Call,
+    ) -> None:
+        target_parts = (
+            _static_call_target_parts(
+                node.func
+            )
+        )
+
+        if target_parts is None:
+            target_kind = (
+                CallTargetKind.DYNAMIC
+            )
+            target_parts = ()
+
+        elif len(
+            target_parts
+        ) == 1:
+            target_kind = (
+                CallTargetKind.NAME
+            )
+
+        else:
+            target_kind = (
+                CallTargetKind.ATTRIBUTE
+            )
+
+        self.calls.append(
+            CallEvidence(
+                target_kind=target_kind,
+                target_parts=target_parts,
+                scope=self.scope_name,
+                line=node.lineno,
+            )
+        )
+
+        self.generic_visit(
+            node
+        )
 
     def visit_ClassDef(
         self,
@@ -249,5 +329,8 @@ def parse_python_source(
         ),
         symbols=tuple(
             visitor.symbols
+        ),
+        calls=tuple(
+            visitor.calls
         ),
     )

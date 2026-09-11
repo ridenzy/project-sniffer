@@ -9,6 +9,7 @@ from project_sniffer.indexing.models import (
     IndexedImport,
     IndexedSymbol,
     SemanticProjectIndex,
+    IndexedCall,
 )
 from project_sniffer.parsing import (
     ParseStatus,
@@ -32,6 +33,10 @@ def build_semantic_project_index(
 
     symbols: list[
         IndexedSymbol
+    ] = []
+
+    calls: list[
+        IndexedCall
     ] = []
 
     for parsed in parsed_sources:
@@ -65,6 +70,14 @@ def build_semantic_project_index(
             for item in parsed.symbols
         )
 
+        calls.extend(
+            IndexedCall(
+                source_path=source_path,
+                evidence=item,
+            )
+            for item in parsed.calls
+        )
+
     return SemanticProjectIndex(
         parsed_sources=parsed_sources,
         imports=tuple(
@@ -72,5 +85,8 @@ def build_semantic_project_index(
         ),
         symbols=tuple(
             symbols
+        ),
+        calls=tuple(
+            calls
         ),
     )

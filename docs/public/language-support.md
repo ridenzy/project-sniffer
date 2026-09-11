@@ -142,22 +142,29 @@ separate future concern.
 | `zig` | Zig | programming | Yes | `zig` |  |
 | `unknown` | Unknown | unknown | Registered only | `text` | No deterministic language evidence was available. |
 
+The Python parser also records normalized call-site evidence. The initial
+`--trace` analyzer currently consumes confirmed internal import dependencies;
+call-target resolution and call-edge rendering remain the next trace stage.
+Broader trace support for routes, APIs, file operations, exports, database
+usage, and additional languages remains future work.
+
 ## Parser support
 
 Parser support is tracked separately from path recognition.
 
 | Registry ID | Parser ID | Status | Normalized evidence |
 | --- | --- | --- | --- |
-| `python` | `python-stdlib-ast` | Parsed | imports; classes; functions; async functions |
+| `python` | `python-stdlib-ast` | Parsed | imports; classes; functions; async functions; call sites |
 
 All other registered languages currently remain recognition-only. Python
 parsing uses the standard-library AST and does not import or execute target
 modules.
 
-The initial `--trace` analyzer consumes Python parser evidence for confirmed
-internal import dependencies. Broader trace support for calls, routes, APIs,
-file operations, exports, database usage, and additional languages remains
-future work.
+The initial `--trace` analyzer currently consumes confirmed internal Python
+import dependencies. Python call sites are now normalized parser evidence, but
+call-target resolution and call dependency edges are not implemented yet.
+Broader trace support for routes, APIs, file operations, exports, database
+usage, and additional languages remains future work.
 
 ## Future detection layers
 

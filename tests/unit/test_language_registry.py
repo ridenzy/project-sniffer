@@ -228,6 +228,23 @@ class LanguageRegistryTests(
                     documentation,
                 )
 
+        self.assertIn(
+            (
+                "| `python` | Python | programming | "
+                "Yes | `python` |  |"
+            ),
+            documentation,
+        )
+
+        self.assertIn(
+            (
+                "| `python` | `python-stdlib-ast` | Parsed | "
+                "imports; classes; functions; async functions; "
+                "call sites |"
+            ),
+            documentation,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

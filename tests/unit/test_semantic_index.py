@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import get_type_hints
+
 import unittest
 from pathlib import Path
 
@@ -8,9 +10,12 @@ from project_sniffer.evidence import (
     SourceLanguage,
 )
 from project_sniffer.indexing import (
+    IndexedCall,
     build_semantic_project_index,
 )
 from project_sniffer.parsing import (
+    CallEvidence,
+    CallTargetKind,
     ParseStatus,
     SymbolKind,
 )
@@ -172,6 +177,30 @@ class SemanticProjectIndexTests(
             ),
         )
 
+        self.assertEqual(
+            tuple(
+                (
+                    item.source_path,
+                    item.evidence.target_kind,
+                    item.evidence.target_parts,
+                    item.evidence.scope,
+                    item.evidence.line,
+                )
+                for item in index.calls
+            ),
+            (
+                (
+                    "pkg/app.py",
+                    CallTargetKind.NAME,
+                    (
+                        "Worker",
+                    ),
+                    "main",
+                    4,
+                ),
+            ),
+        )
+
     def test_failed_or_nontext_results_remain_visible(
         self,
     ) -> None:
@@ -217,6 +246,22 @@ class SemanticProjectIndexTests(
             (),
         )
 
+        self.assertEqual(
+            index.calls,
+            (),
+        )
+
+    def test_indexed_call_type_annotation_resolves(
+        self,
+    ) -> None:
+        annotations = get_type_hints(
+            IndexedCall
+        )
+
+        self.assertIs(
+            annotations["evidence"],
+            CallEvidence,
+        )
 
 if __name__ == "__main__":
     unittest.main()

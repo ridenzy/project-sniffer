@@ -2,6 +2,7 @@ from project_sniffer.indexing.builder import (
     build_semantic_project_index,
 )
 from project_sniffer.indexing.models import (
+    IndexedCall,
     IndexedImport,
     IndexedSymbol,
     SemanticProjectIndex,
@@ -9,6 +10,7 @@ from project_sniffer.indexing.models import (
 
 
 __all__ = [
+    "IndexedCall",
     "IndexedImport",
     "IndexedSymbol",
     "SemanticProjectIndex",
