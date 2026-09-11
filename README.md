@@ -122,6 +122,14 @@ The existing implementation can:
   unresolved, and dynamic call evidence;
 - render confirmed caller scope and target-symbol relationships through
   `--trace`.
+- derive deterministic caller and callee indexes exclusively from confirmed
+  `CALL` dependency edges without reopening source files or rerunning call
+  resolution;
+- group the same confirmed call edges into outbound `CALLS` and inbound
+  `CALLED BY` views while retaining their original source-location and symbol
+  provenance;
+- render confirmed caller-endpoint and callee-endpoint counts plus navigable
+  forward and reverse call relationships through `--trace`.
 
 ## Language recognition
 

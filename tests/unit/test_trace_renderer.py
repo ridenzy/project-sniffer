@@ -118,6 +118,46 @@ class TraceRendererTests(
         )
 
         self.assertIn(
+            "- Confirmed caller endpoints: 1",
+            rendered,
+        )
+
+        self.assertIn(
+            "- Confirmed callee endpoints: 1",
+            rendered,
+        )
+
+        self.assertIn(
+            "## Confirmed calls by caller",
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/app.py::build`\n"
+                "  - CALLS "
+                "`pkg/worker.py::Worker` "
+                "(line 5)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            "## Confirmed calls by callee",
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/worker.py::Worker`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::build` "
+                "(line 5)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
             "- Shadowed calls: 1",
             rendered,
         )

@@ -82,6 +82,11 @@ The project is still in pre-1.0 development.
   call bindings, producing explicit `RESOLVED_INTERNAL` call outcomes.
 - Confirmed Python `CALL` dependency edges with caller scope, target symbol,
   source location, and proof provenance.
+- Deterministic confirmed-call indexing derived only from existing `CALL`
+  dependency edges, providing outbound caller and inbound callee views without
+  re-resolving call evidence.
+- Dependency-trace caller/callee sections with confirmed caller and callee
+  endpoint counts while preserving the original dependency-edge provenance.
 
 ### Removed
 

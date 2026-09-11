@@ -1,6 +1,10 @@
 from __future__ import annotations
 
+from project_sniffer.tracing.call_index import (
+    build_call_index,
+)
 from project_sniffer.tracing.models import (
+    CallEndpoint,
     CallResolution,
     CallResolutionStatus,
     DependencyGraph,
@@ -66,6 +70,13 @@ def _scope_label(
 
     return scope
 
+def _call_endpoint_label(
+    endpoint: CallEndpoint,
+) -> str:
+    return (
+        f"{endpoint.path}::"
+        f"{_scope_label(endpoint.symbol)}"
+    )
 
 def render_dependency_graph(
     graph: DependencyGraph,
@@ -166,6 +177,10 @@ def render_dependency_graph(
         )
     )
 
+    call_index = build_call_index(
+        graph
+    )
+
     lines = [
         "# Dependency Trace",
         "",
@@ -179,6 +194,14 @@ def render_dependency_graph(
         (
             "- Resolved internal calls: "
             f"{len(resolved_calls)}"
+        ),
+        (
+            "- Confirmed caller endpoints: "
+            f"{len(call_index.outbound)}"
+        ),
+        (
+            "- Confirmed callee endpoints: "
+            f"{len(call_index.inbound)}"
         ),
         f"- Unresolved imports: {len(unresolved)}",
         f"- Ambiguous imports: {len(ambiguous)}",
@@ -244,6 +267,66 @@ def render_dependency_graph(
                     f"→ `{edge.target_path}` "
                     f"(line {edge.line}, "
                     f"scope `{scope}`)"
+                )
+    else:
+        lines.append(
+            "- None."
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Confirmed calls by caller",
+            "",
+        ]
+    )
+
+    if call_index.outbound:
+        for entry in call_index.outbound:
+            lines.append(
+                "- "
+                f"`{_call_endpoint_label(entry.endpoint)}`"
+            )
+
+            for edge in entry.edges:
+                target_symbol = (
+                    edge.target_symbol
+                    if edge.target_symbol is not None
+                    else "<unknown>"
+                )
+
+                lines.append(
+                    "  - CALLS "
+                    f"`{edge.target_path}"
+                    f"::{target_symbol}` "
+                    f"(line {edge.line})"
+                )
+    else:
+        lines.append(
+            "- None."
+        )
+
+    lines.extend(
+        [
+            "",
+            "## Confirmed calls by callee",
+            "",
+        ]
+    )
+
+    if call_index.inbound:
+        for entry in call_index.inbound:
+            lines.append(
+                "- "
+                f"`{_call_endpoint_label(entry.endpoint)}`"
+            )
+
+            for edge in entry.edges:
+                lines.append(
+                    "  - CALLED BY "
+                    f"`{edge.source_path}"
+                    f"::{_scope_label(edge.scope)}` "
+                    f"(line {edge.line})"
                 )
     else:
         lines.append(

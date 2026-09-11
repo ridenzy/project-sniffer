@@ -126,12 +126,16 @@ Canonical ScanManifest
     |                                                       +-- SemanticProjectIndex
     |                                                               |
     |                                                               +-- Python import resolution
+    |                                                               |
+    |                                                               +-- Python call resolution
     |                                                                       |
     |                                                                       +-- DependencyGraph
-    |                                                                           |
-    |                                                                           +-- trace renderer
     |                                                                               |
-    |                                                                               +-- --trace
+    |                                                                               +-- CallIndex
+    |                                                                               |
+    |                                                                               +-- trace renderer
+    |                                                                                       |
+    |                                                                                       +-- --trace
     +-- --docs raw-byte export
             |
             +-- generated docs/public snapshot
@@ -307,9 +311,36 @@ Import edges retain source path, target path, source line, enclosing scope, and
 their original `ImportResolution`. Call edges additionally retain the confirmed
 target symbol and their original `CallResolution` proof evidence.
 
-The dependency graph remains an internal semantic-analysis layer, but it is now
-consumed by the trace renderer and the public `--trace` analyzer. Broader trace
-relationships remain later stages.
+The dependency graph remains the authoritative confirmed-relationship layer.
+The trace renderer consumes the graph directly for raw dependency rendering and
+also derives confirmed caller/callee navigation from its `CALL` edges. Broader
+trace relationships remain later stages.
+
+## Confirmed call indexing
+
+`project_sniffer.tracing.call_index` derives deterministic forward and reverse
+call views from an existing `DependencyGraph`.
+
+The index does not parse source text, reopen project files, rerun import
+resolution, or rerun Python call resolution. It consumes only dependency edges
+already present in the graph.
+
+Only edges whose kind is `CALL` participate in the index. Because uncertain
+potential, shadowed, ambiguous, unresolved, and dynamic call outcomes do not
+become dependency edges, they cannot enter the confirmed caller/callee index.
+
+Each confirmed call edge is grouped in two directions:
+
+- the outbound index groups edges by caller source path and caller scope;
+- the inbound index groups the same edges by callee source path and confirmed
+  target symbol.
+
+Both views retain the original immutable `DependencyEdge` objects rather than
+creating a second relationship-evidence type.
+
+The trace renderer exposes these derived relationships as `CALLS` and
+`CALLED BY` sections and reports the number of confirmed caller and callee
+endpoints separately from the number of confirmed call edges.
 
 ## Core safety model
 

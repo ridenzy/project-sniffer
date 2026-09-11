@@ -121,3 +121,29 @@ class DependencyGraph:
         DependencyEdge,
         ...,
     ]
+
+@dataclass(frozen=True)
+class CallEndpoint:
+    path: str
+    symbol: str | None
+
+
+@dataclass(frozen=True)
+class CallIndexEntry:
+    endpoint: CallEndpoint
+    edges: tuple[
+        DependencyEdge,
+        ...,
+    ]
+
+
+@dataclass(frozen=True)
+class CallIndex:
+    outbound: tuple[
+        CallIndexEntry,
+        ...,
+    ]
+    inbound: tuple[
+        CallIndexEntry,
+        ...,
+    ]
