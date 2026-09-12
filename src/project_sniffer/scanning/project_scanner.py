@@ -37,11 +37,37 @@ def _is_excluded_directory(
     )
 
 
+def _policy_relative_path(
+    relative_path: str,
+    path_prefix: str | None,
+) -> str:
+    if path_prefix is None:
+        return relative_path
+
+    normalized_prefix = (
+        path_prefix
+        .replace("\\", "/")
+        .strip("/")
+    )
+
+    if not normalized_prefix:
+        return relative_path
+
+    if not relative_path:
+        return normalized_prefix
+
+    return (
+        f"{normalized_prefix}/"
+        f"{relative_path}"
+    )
+
 def scan_project(
     root_path: str | Path,
     ignore: dict[str, list[str]] | None = None,
     *,
     excluded_directories: Iterable[Path] = (),
+    apply_gitignore: bool = True,
+    ignore_path_prefix: str | None = None,
 ) -> ScanManifest:
     """
     Walk the target project once and return a deterministic scan manifest.
@@ -100,10 +126,11 @@ def scan_project(
             else relative_root_path.as_posix()
         )
 
-        gitignore_matcher.load_directory(
-            directory_path=current_root,
-            relative_directory=relative_root,
-        )
+        if apply_gitignore:
+            gitignore_matcher.load_directory(
+                directory_path=current_root,
+                relative_directory=relative_root,
+            )
 
         kept_directories: list[str] = []
 
@@ -122,9 +149,16 @@ def scan_project(
                 .as_posix()
             )
 
+            policy_relative_directory = (
+                _policy_relative_path(
+                    relative_directory,
+                    ignore_path_prefix,
+                )
+            )
+
             if matcher.matches_folder(
                 directory_name,
-                relative_directory,
+                policy_relative_directory,
             ):
                 continue
 
@@ -134,8 +168,11 @@ def scan_project(
             ):
                 continue
 
-            if gitignore_matcher.matches_directory(
-                relative_directory
+            if (
+                apply_gitignore
+                and gitignore_matcher.matches_directory(
+                    relative_directory
+                )
             ):
                 continue
 
@@ -165,14 +202,24 @@ def scan_project(
                 .as_posix()
             )
 
+            policy_relative_path = (
+                _policy_relative_path(
+                    relative_path,
+                    ignore_path_prefix,
+                )
+            )
+
             if matcher.matches_file(
                 filename,
-                relative_path,
+                policy_relative_path,
             ):
                 continue
 
-            if gitignore_matcher.matches_file(
-                relative_path
+            if (
+                apply_gitignore
+                and gitignore_matcher.matches_file(
+                    relative_path
+                )
             ):
                 continue
 

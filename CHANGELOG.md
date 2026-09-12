@@ -35,10 +35,20 @@ The project is still in pre-1.0 development.
 - Maintained public architecture documentation.
 - Maintained configuration and ignore-rule documentation.
 - Expanded repository-local Git ignore protection.
-- `--docs` as a separate output capability for copying manifest-approved
-  root-level `docs/public/**` content into the project-specific output tree.
-- Byte-preserving public-documentation export that reuses the shared
-  `ScanManifest` rather than introducing a second project walk.
+- `--docs` as a separate documentation-report capability for root-level
+  `docs/public/` and `docs/private/`, producing canonical public and private
+  Markdown reports under the project-specific output directory.
+- Scoped documentation discovery that reuses Project Sniffer scanner ignore
+  semantics while avoiding a canonical full-project scan for docs-only runs.
+- Documentation-scoped safe reading and `SourceEvidence` preparation through
+  the shared Markdown report builder rather than raw-byte documentation copies.
+- Deliberate disabling of target-project `.gitignore` filtering inside explicit
+  documentation scopes while preserving Project Sniffer recommended, personal,
+  and active output exclusions.
+- Interactive one-run confirmation before overriding a Project Sniffer
+  exclusion of `docs/private/`, with all unrelated ignore rules retained.
+- Stale private-documentation report cleanup when a later private-scope
+  override is declined.
 - Shared `SourceEvidence` metadata layered on the existing immutable safe-read
   results without reopening target-project files.
 - Deterministic source-language classification for source-report presentation
@@ -105,6 +115,8 @@ The project is still in pre-1.0 development.
   dependencies are defined by `pyproject.toml`.
 - Legacy global personal-ignore JSON support and XDG/APPDATA personal-registry resolution.
 - Redundant `project_sniffer.scanner` re-export shim after application imports moved directly to `project_sniffer.scanning`.
+- Legacy raw-byte `project_sniffer.docs_exporter` implementation and its
+  exporter-specific tests after `--docs` moved to scoped Markdown reports.
 
 ### Security
 
@@ -115,5 +127,8 @@ The project is still in pre-1.0 development.
   outside-project, or manifest/path-mismatch source paths before reading content.
 - Oversized source files are skipped without loading their full content, and
   non-regular filesystem entries are refused before source content is opened.
-- Public-documentation export rejects source and destination symlink hazards,
-  path escapes, and non-regular sources before replacing destination files.
+- Documentation reporting rejects symlinked documentation-scope paths and
+  unsafe output destinations before report generation, while scoped files use
+  the shared safe-reader classification boundary.
+- Declining private-documentation exposure removes an existing canonical
+  private report so stale sensitive output is not mistaken for current output.

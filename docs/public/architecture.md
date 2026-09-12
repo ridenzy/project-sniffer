@@ -26,12 +26,13 @@ sniff
              +-- project_sniffer.tracing
              +-- project_sniffer.architecture_builder
              +-- project_sniffer.report_builder
-             +-- project_sniffer.docs_exporter
+             +-- project_sniffer.docs_reporter
 ```
 
 The packaged analyzers currently support `--architecture`, `--report`, and
-`--trace`. `--docs` is additionally available as a separate output capability
-for copying manifest-approved root-level `docs/public/**` content.
+`--trace`. `--docs` is additionally available as a separate documentation
+report capability for the root-level `docs/public/` and `docs/private/`
+scopes.
 
 The package also contains its recommended ignore configuration as a packaged
 resource.
@@ -63,7 +64,7 @@ The package refactor must preserve:
 - safe Markdown fencing;
 - architecture-tree generation;
 - source-report generation;
-- manifest-approved byte-preserving `docs/public/**` export;
+- scoped Markdown reporting for root-level `docs/public/` and `docs/private/`;
 - clear terminal summaries.
 
 ## Known limitations in the current implementation
@@ -90,7 +91,10 @@ sniff
 
 `--all` will select all stable static analyzers.
 
-## Target shared scan pipeline
+## Current analysis and documentation pipelines
+
+The analyzer and documentation paths deliberately share reusable components
+without sharing the same discovery scope.
 
 ```text
 CLI parsing
@@ -99,69 +103,88 @@ Configuration resolution
     |
 Project-root validation
     |
-Immutable scan settings
+project_sniffer.application
     |
-Single project walk
-    |
-Path classification and ignore policy
-    |
-Canonical ScanManifest
-    |
-    +-- architecture builder
-    |
-    +-- safe file reading
+    +-- analyzer request
     |       |
-    |       +-- immutable FileReadResult
+    |       +-- canonical full-project ScanManifest
     |               |
-    |               +-- SourceEvidence
+    |               +-- architecture builder
+    |               |
+    |               +-- safe file reading
     |                       |
-    |                       +-- language classifier
+    |                       +-- FileReadResult
     |                               |
-    |                               +-- language registry
+    |                               +-- SourceEvidence
     |                                       |
-    |                                       +-- parser registry
+    |                                       +-- source report
+    |                                       |
+    |                                       +-- semantic parsing
     |                                               |
-    |                                               +-- Python stdlib AST parser
+    |                                               +-- SemanticProjectIndex
     |                                                       |
-    |                                                       +-- SemanticProjectIndex
+    |                                                       +-- import resolution
+    |                                                       +-- call resolution
     |                                                               |
-    |                                                               +-- Python import resolution
-    |                                                               |
-    |                                                               +-- Python call resolution
+    |                                                               +-- DependencyGraph
     |                                                                       |
-    |                                                                       +-- DependencyGraph
-    |                                                                               |
-    |                                                                               +-- CallIndex
-    |                                                                               |
-    |                                                                               +-- trace renderer
-    |                                                                                       |
-    |                                                                                       +-- --trace
-    +-- --docs raw-byte export
+    |                                                                       +-- CallIndex
+    |                                                                       +-- trace renderer
+    |
+    +-- --docs
             |
-            +-- generated docs/public snapshot
+            +-- project_sniffer.docs_reporter
+                    |
+                    +-- docs/public/ scoped scan
+                    |
+                    +-- docs/private/ scoped scan
+                            |
+                            +-- optional one-run private-scope approval
+                    |
+                    +-- Project Sniffer ignore rules
+                    +-- active output exclusion
+                    +-- target .gitignore disabled
+                    |
+                    +-- safe file reading
+                            |
+                            +-- SourceEvidence
+                                    |
+                                    +-- Markdown report builder
+                                            |
+                                            +-- public docs report
+                                            +-- private docs report
 ```
 
-Architecture generation, source-report generation, dependency-trace generation,
-and `--docs` all consume the same shared scan manifest and do not introduce
-separate filesystem discovery walks.
+Architecture generation, source-report generation, and dependency-trace
+generation consume the canonical full-project manifest when their analyzers are
+selected.
 
-The source-report and trace paths pass discovered files through
-`project_sniffer.reading` before Markdown rendering or semantic analysis. The
-reader returns immutable `FileReadResult` evidence, rejects paths outside the
-resolved project root or inconsistent with the manifest, and does not follow
-discovered file symlinks for source content. Binary, oversized, unreadable,
-ordinary-symlink, and escaped-symlink outcomes are classified before the report
-builder or semantic-analysis pipeline receives source text.
+`--docs` does not require that manifest. A docs-only run inspects only the
+root-level documentation scopes through separate scoped calls to the shared
+scanner.
 
-The reader applies an 8 MiB default per-file source-read ceiling and rejects
-non-regular filesystem entries before source content is opened.
+Those documentation scans preserve project-relative Project Sniffer ignore
+semantics by applying the appropriate documentation-path prefix. Active output
+directory exclusion also remains in force.
 
-The documentation-export branch intentionally does not pass files through
-`project_sniffer.reading`: `--docs` preserves the original source bytes and
-may copy binary documentation. Instead, `project_sniffer.docs_exporter`
-filters the existing manifest to root-level `docs/public/**`, validates
-source and destination containment, refuses source and destination symlink
-hazards, requires regular source files, and performs streamed atomic copies.
+Target-project `.gitignore` processing is deliberately disabled for
+documentation-scoped scans. This allows explicit documentation reporting to
+see material such as `docs/private/` even when that directory is intentionally
+Git-ignored.
+
+Documentation files are not copied byte-for-byte. They pass through
+`project_sniffer.reading`, receive deterministic `SourceEvidence`, and are
+rendered by the shared Markdown report builder. Binary, oversized, unreadable,
+symlink, escaped-path, and other unsafe read outcomes therefore remain
+classified rather than copied into a report.
+
+Documentation scope paths themselves may not traverse symlinks, and canonical
+report destinations are validated before output is replaced or removed.
+
+When Project Sniffer configuration excludes `docs/private/`, the application
+requires explicit one-run confirmation before that private scope exclusion is
+overridden. Declining the override leaves the scope excluded and removes an
+existing stale canonical private report.
 
 ## Source evidence and language recognition
 

@@ -142,9 +142,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--docs",
         action="store_true",
         help=(
-            "Copy manifest-approved root-level "
-            "docs/public files into the generated "
-            "project output directory."
+            "Generate separate Markdown reports "
+            "for root-level docs/public and "
+            "docs/private documentation when present."
         ),
     )
 

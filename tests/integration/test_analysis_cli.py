@@ -161,6 +161,13 @@ class ProjectSnifferAnalysisCliTests(
             ),
         )
 
+        self.assertIn(
+            "**Project:** `fixture-project`",
+            report_path.read_text(
+                encoding="utf-8"
+            ),
+        )
+
     def test_architecture_only_does_not_create_source_report(
         self,
     ) -> None:
@@ -416,7 +423,7 @@ class ProjectSnifferAnalysisCliTests(
             architecture_text,
         )
 
-    def test_docs_only_copies_manifest_approved_public_docs(
+    def test_docs_only_generates_public_and_private_reports(
         self,
     ) -> None:
         public_docs = (
@@ -425,7 +432,17 @@ class ProjectSnifferAnalysisCliTests(
             / "public"
         )
 
+        private_docs = (
+            self.project
+            / "docs"
+            / "private"
+        )
+
         public_docs.mkdir(
+            parents=True
+        )
+
+        private_docs.mkdir(
             parents=True
         )
 
@@ -438,6 +455,15 @@ class ProjectSnifferAnalysisCliTests(
             newline="\n",
         )
 
+        (
+            public_docs
+            / "git-ignored.md"
+        ).write_text(
+            "docs report still sees me\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
         assets = (
             public_docs
             / "assets"
@@ -445,15 +471,11 @@ class ProjectSnifferAnalysisCliTests(
 
         assets.mkdir()
 
-        binary_payload = (
-            b"binary\x00documentation"
-        )
-
         (
             assets
             / "diagram.bin"
         ).write_bytes(
-            binary_payload
+            b"binary\x00documentation"
         )
 
         internal = (
@@ -467,24 +489,16 @@ class ProjectSnifferAnalysisCliTests(
             internal
             / "hidden.md"
         ).write_text(
-            "hidden\n",
+            "personal ignore hides me\n",
             encoding="utf-8",
             newline="\n",
         )
-
-        private_docs = (
-            self.project
-            / "docs"
-            / "private"
-        )
-
-        private_docs.mkdir()
 
         (
             private_docs
             / "notes.md"
         ).write_text(
-            "private\n",
+            "private notes\n",
             encoding="utf-8",
             newline="\n",
         )
@@ -494,7 +508,27 @@ class ProjectSnifferAnalysisCliTests(
             / ".gitignore"
         ).write_text(
             "docs/private/\n"
-            "docs/public/internal/\n",
+            "docs/public/git-ignored.md\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        self.personal_registry_path.parent.mkdir(
+            parents=True
+        )
+
+        self.personal_registry_path.write_text(
+            "{\n"
+            '    "schema_version": 1,\n'
+            '    "projects": {\n'
+            '        "fixture-project": {\n'
+            '            "IGNORE_FOLDERS": [\n'
+            '                "docs/public/internal"\n'
+            "            ],\n"
+            '            "IGNORE_FILES": []\n'
+            "        }\n"
+            "    }\n"
+            "}\n",
             encoding="utf-8",
             newline="\n",
         )
@@ -504,19 +538,24 @@ class ProjectSnifferAnalysisCliTests(
             / "docs-output"
         )
 
-        status = main(
-            [
-                "--project",
-                str(
-                    self.project
-                ),
-                "--docs",
-                "--output",
-                str(
-                    output_base
-                ),
-            ]
-        )
+        stdout = io.StringIO()
+
+        with redirect_stdout(
+            stdout
+        ):
+            status = main(
+                [
+                    "--project",
+                    str(
+                        self.project
+                    ),
+                    "--docs",
+                    "--output",
+                    str(
+                        output_base
+                    ),
+                ]
+            )
 
         self.assertEqual(
             status,
@@ -528,45 +567,61 @@ class ProjectSnifferAnalysisCliTests(
             / "fixture-project"
         )
 
-        copied_docs = (
+        public_report = (
             report_directory
-            / "docs"
-            / "public"
+            / "fixture-project-public-docs-report.md"
         )
 
-        self.assertEqual(
-            (
-                copied_docs
-                / "guide.md"
-            ).read_text(
-                encoding="utf-8"
-            ),
-            "public guide\n",
+        private_report = (
+            report_directory
+            / "fixture-project-private-docs-report.md"
         )
 
-        self.assertEqual(
-            (
-                copied_docs
-                / "assets"
-                / "diagram.bin"
-            ).read_bytes(),
-            binary_payload,
+        self.assertTrue(
+            public_report.is_file()
         )
 
-        self.assertFalse(
-            (
-                copied_docs
-                / "internal"
-                / "hidden.md"
-            ).exists()
+        self.assertTrue(
+            private_report.is_file()
+        )
+
+        public_text = public_report.read_text(
+            encoding="utf-8"
+        )
+
+        private_text = private_report.read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn(
+            "# `guide.md`",
+            public_text,
+        )
+
+        self.assertIn(
+            "# `git-ignored.md`",
+            public_text,
+        )
+
+        self.assertNotIn(
+            "internal/hidden.md",
+            public_text,
+        )
+
+        self.assertNotIn(
+            "diagram.bin",
+            public_text,
+        )
+
+        self.assertIn(
+            "# `notes.md`",
+            private_text,
         )
 
         self.assertFalse(
             (
                 report_directory
                 / "docs"
-                / "private"
-                / "notes.md"
             ).exists()
         )
 
@@ -582,6 +637,352 @@ class ProjectSnifferAnalysisCliTests(
                 report_directory
                 / "fixture-project-project-report.md"
             ).exists()
+        )
+
+        rendered = stdout.getvalue()
+
+        self.assertIn(
+            "docs/public/: found",
+            rendered,
+        )
+
+        self.assertIn(
+            "docs/private/: found",
+            rendered,
+        )
+
+        self.assertIn(
+            "Skipped binary files: 1",
+            rendered,
+        )
+
+        self.assertIn(
+            "Documentation reports generated: 2",
+            rendered,
+        )
+
+    def test_docs_private_personal_ignore_can_be_approved(
+        self,
+    ) -> None:
+        private_docs = (
+            self.project
+            / "docs"
+            / "private"
+        )
+
+        private_docs.mkdir(
+            parents=True
+        )
+
+        (
+            private_docs
+            / "notes.md"
+        ).write_text(
+            "private notes\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        self.personal_registry_path.parent.mkdir(
+            parents=True
+        )
+
+        self.personal_registry_path.write_text(
+            "{\n"
+            '    "schema_version": 1,\n'
+            '    "projects": {\n'
+            '        "fixture-project": {\n'
+            '            "IGNORE_FOLDERS": [\n'
+            '                "private"\n'
+            "            ],\n"
+            '            "IGNORE_FILES": []\n'
+            "        }\n"
+            "    }\n"
+            "}\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        output_base = (
+            self.workspace
+            / "private-approved-output"
+        )
+
+        stdout = io.StringIO()
+
+        with patch(
+            "builtins.input",
+            return_value="y",
+        ) as prompt, redirect_stdout(
+            stdout
+        ):
+            status = main(
+                [
+                    "--project",
+                    str(
+                        self.project
+                    ),
+                    "--docs",
+                    "--output",
+                    str(
+                        output_base
+                    ),
+                ]
+            )
+
+        self.assertEqual(
+            status,
+            0,
+        )
+
+        prompt.assert_called_once_with(
+            "Generate the docs/private/ "
+            "report? [y/N]: "
+        )
+
+        private_report = (
+            output_base
+            / "fixture-project"
+            / "fixture-project-private-docs-report.md"
+        )
+
+        self.assertTrue(
+            private_report.is_file()
+        )
+
+        self.assertIn(
+            "# `notes.md`",
+            private_report.read_text(
+                encoding="utf-8"
+            ),
+        )
+
+        rendered = stdout.getvalue()
+
+        self.assertIn(
+            "WARNING: docs/private/",
+            rendered,
+        )
+
+        self.assertIn(
+            "override approved",
+            rendered,
+        )
+
+        self.assertIn(
+            "private-scope exclusion overridden",
+            rendered,
+        )
+
+        self.assertIn(
+            "Documentation reports generated: 1",
+            rendered,
+        )
+
+    def test_docs_private_personal_ignore_can_be_declined(
+        self,
+    ) -> None:
+        private_docs = (
+            self.project
+            / "docs"
+            / "private"
+        )
+
+        private_docs.mkdir(
+            parents=True
+        )
+
+        (
+            private_docs
+            / "notes.md"
+        ).write_text(
+            "private notes\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        self.personal_registry_path.parent.mkdir(
+            parents=True
+        )
+
+        self.personal_registry_path.write_text(
+            "{\n"
+            '    "schema_version": 1,\n'
+            '    "projects": {\n'
+            '        "fixture-project": {\n'
+            '            "IGNORE_FOLDERS": [\n'
+            '                "private"\n'
+            "            ],\n"
+            '            "IGNORE_FILES": []\n'
+            "        }\n"
+            "    }\n"
+            "}\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        output_base = (
+            self.workspace
+            / "private-declined-output"
+        )
+
+        output_directory = (
+            output_base
+            / "fixture-project"
+        )
+
+        output_directory.mkdir(
+            parents=True
+        )
+
+        private_report = (
+            output_directory
+            / "fixture-project-private-docs-report.md"
+        )
+
+        private_report.write_text(
+            "stale private report\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        self.assertTrue(
+            private_report.is_file()
+        )
+
+        stdout = io.StringIO()
+
+        with patch(
+            "builtins.input",
+            return_value="n",
+        ) as prompt, redirect_stdout(
+            stdout
+        ):
+            status = main(
+                [
+                    "--project",
+                    str(
+                        self.project
+                    ),
+                    "--docs",
+                    "--output",
+                    str(
+                        output_base
+                    ),
+                ]
+            )
+
+        self.assertEqual(
+            status,
+            0,
+        )
+
+        prompt.assert_called_once_with(
+            "Generate the docs/private/ "
+            "report? [y/N]: "
+        )
+
+        self.assertFalse(
+            private_report.exists()
+        )
+
+        rendered = stdout.getvalue()
+
+        self.assertIn(
+            "WARNING: docs/private/",
+            rendered,
+        )
+
+        self.assertIn(
+            "override declined",
+            rendered,
+        )
+
+        self.assertIn(
+            "docs/private/: found",
+            rendered,
+        )
+
+        self.assertIn(
+            "Report: not generated",
+            rendered,
+        )
+
+        self.assertIn(
+            "Documentation reports generated: 0",
+            rendered,
+        )
+
+    def test_docs_only_reports_missing_documentation_directories(
+        self,
+    ) -> None:
+        output_base = (
+            self.workspace
+            / "docs-missing-output"
+        )
+
+        stdout = io.StringIO()
+
+        with redirect_stdout(
+            stdout
+        ):
+            status = main(
+                [
+                    "--project",
+                    str(
+                        self.project
+                    ),
+                    "--docs",
+                    "--output",
+                    str(
+                        output_base
+                    ),
+                ]
+            )
+
+        self.assertEqual(
+            status,
+            0,
+        )
+
+        report_directory = (
+            output_base
+            / "fixture-project"
+        )
+
+        self.assertTrue(
+            report_directory.is_dir()
+        )
+
+        self.assertFalse(
+            (
+                report_directory
+                / "fixture-project-public-docs-report.md"
+            ).exists()
+        )
+
+        self.assertFalse(
+            (
+                report_directory
+                / "fixture-project-private-docs-report.md"
+            ).exists()
+        )
+
+        rendered = stdout.getvalue()
+
+        self.assertIn(
+            "docs/public/: not found",
+            rendered,
+        )
+
+        self.assertIn(
+            "docs/private/: not found",
+            rendered,
+        )
+
+        self.assertIn(
+            "Documentation reports generated: 0",
+            rendered,
         )
 
     def test_in_project_custom_output_is_excluded_on_repeat_scan(

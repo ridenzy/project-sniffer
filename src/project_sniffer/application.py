@@ -10,9 +10,10 @@ from project_sniffer.config import (
     ConfigurationError,
     load_ignore_config,
 )
-from project_sniffer.docs_exporter import (
-    DocsExportError,
-    export_public_docs,
+from project_sniffer.docs_reporter import (
+    DocsReportError,
+    build_documentation_reports,
+    print_documentation_summary,
 )
 from project_sniffer.evidence import (
     build_source_evidence,
@@ -103,7 +104,72 @@ def resolve_output_directory(
         / project_name
     ).resolve()
 
+def _confirm_private_docs_ignore_override() -> bool:
+    print(
+        "\nWARNING: docs/private/ exists and is "
+        "excluded by Project Sniffer ignore "
+        "configuration."
+    )
 
+    print(
+        "Generating this report may include "
+        "private or sensitive project "
+        "documentation."
+    )
+
+    print(
+        "Only the docs/private/ scope exclusion "
+        "will be overridden for this run. "
+        "All other Project Sniffer ignore rules "
+        "remain active."
+    )
+
+    while True:
+        try:
+            answer = input(
+                "Generate the docs/private/ "
+                "report? [y/N]: "
+            )
+
+        except EOFError:
+            print(
+                "\nNo interactive response was "
+                "available. Keeping docs/private/ "
+                "ignored."
+            )
+            return False
+
+        normalized = (
+            answer
+            .strip()
+            .lower()
+        )
+
+        if normalized in {
+            "y",
+            "yes",
+        }:
+            print(
+                "Private documentation override "
+                "approved for this run."
+            )
+            return True
+
+        if normalized in {
+            "",
+            "n",
+            "no",
+        }:
+            print(
+                "Private documentation override "
+                "declined. Keeping docs/private/ "
+                "ignored."
+            )
+            return False
+
+        print(
+            "Please answer y or n."
+        )
 
 def run_analysis(
     *,
@@ -187,37 +253,6 @@ def run_analysis(
         f"Output directory: {output_directory}"
     )
 
-    print(
-        "\nScanning project..."
-    )
-
-    try:
-        manifest = scan_project(
-            project_path,
-            ignore,
-            excluded_directories=(
-                output_directory,
-            ),
-        )
-    except ScanError as error:
-        print(
-            f"Error: scan: {error}",
-            file=sys.stderr,
-        )
-        return INVALID_INPUT
-
-    print(
-        "Scanned files after ignores: "
-        f"{len(manifest.files)}"
-    )
-
-    if not manifest.files:
-        print(
-            "Warning: no files were found. "
-            "Check the project path or ignore rules."
-        )
-        return 0
-
     try:
         output_directory.mkdir(
             parents=True,
@@ -231,11 +266,57 @@ def run_analysis(
         )
         return OUTPUT_ERROR
 
+    analysis_requested = (
+        architecture_requested
+        or report_requested
+        or trace_requested
+    )
+
+    manifest = None
+
+    if analysis_requested:
+        print(
+            "\nScanning project..."
+        )
+
+        try:
+            manifest = scan_project(
+                project_path,
+                ignore,
+                excluded_directories=(
+                    output_directory,
+                ),
+            )
+        except ScanError as error:
+            print(
+                f"Error: scan: {error}",
+                file=sys.stderr,
+            )
+            return INVALID_INPUT
+
+        print(
+            "Scanned files after ignores: "
+            f"{len(manifest.files)}"
+        )
+
+        if not manifest.files:
+            print(
+                "Warning: no files were found. "
+                "Check the project path or ignore rules."
+            )
+
+            if not docs_requested:
+                return 0
+
     source_evidence = ()
 
     if (
-        report_requested
-        or trace_requested
+        manifest is not None
+        and manifest.files
+        and (
+            report_requested
+            or trace_requested
+        )
     ):
         try:
             read_results = read_manifest_files(
@@ -257,7 +338,12 @@ def run_analysis(
             )
             return OUTPUT_ERROR
 
-    if architecture_requested:
+
+    if (
+        architecture_requested
+        and manifest is not None
+        and manifest.files
+    ):
         architecture_output = (
             output_directory
             / (
@@ -295,7 +381,11 @@ def run_analysis(
             f"{architecture_output}"
         )
 
-    if report_requested:
+    if (
+        report_requested
+        and manifest is not None
+        and manifest.files
+    ):
         report_output = (
             output_directory
             / (
@@ -327,7 +417,11 @@ def run_analysis(
             f"{report_output}"
         )
 
-    if trace_requested:
+    if (
+        trace_requested
+        and manifest is not None
+        and manifest.files
+    ):
         trace_output = (
             output_directory
             / (
@@ -378,58 +472,39 @@ def run_analysis(
             f"{trace_output}"
         )
 
-    if docs_requested:
-        docs_output = (
-            output_directory
-            / "docs"
-            / "public"
-        )
 
+    if docs_requested:
         print(
-            "\nCopying public documentation..."
+            "\nGenerating documentation reports..."
         )
 
         try:
-            docs_summary = export_public_docs(
-                manifest=manifest,
-                output_directory=output_directory,
+            docs_summary = (
+                build_documentation_reports(
+                    project_path=project_path,
+                    output_directory=(
+                        output_directory
+                    ),
+                    ignore=ignore,
+                    confirm_private_ignore_override=(
+                        _confirm_private_docs_ignore_override
+                    ),
+                )
             )
-        except DocsExportError as error:
+        except (
+            DocsReportError,
+            OSError,
+        ) as error:
             print(
-                "Error: documentation export: "
+                "Error: documentation reports: "
                 f"{error}",
                 file=sys.stderr,
             )
             return OUTPUT_ERROR
 
-        print("Documentation copy summary:")
-        print(
-            f"  Copied files: "
-            f"{docs_summary.copied_files}"
+        print_documentation_summary(
+            docs_summary
         )
-        print(
-            "  Skipped symlink files: "
-            f"{docs_summary.skipped_symlink_files}"
-        )
-        print(
-            "  Skipped unsafe-path files: "
-            f"{docs_summary.skipped_unsafe_files}"
-        )
-        print(
-            "  Skipped unreadable files: "
-            f"{docs_summary.skipped_unreadable_files}"
-        )
-
-        if docs_summary.copied_files:
-            print(
-                "Documentation copied to: "
-                f"{docs_output}"
-            )
-        else:
-            print(
-                "Documentation copy found no "
-                "manifest-approved docs/public files."
-            )
 
     print(
         "\nDone."

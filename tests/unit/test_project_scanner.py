@@ -502,6 +502,120 @@ class ProjectScannerTests(
             relative_files,
         )
 
+    def test_gitignore_can_be_disabled_for_scoped_scan(
+        self,
+    ) -> None:
+        docs_root = (
+            self.project
+            / "docs"
+            / "private"
+        )
+
+        docs_root.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        (
+            docs_root
+            / ".gitignore"
+        ).write_text(
+            "hidden.md\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        (
+            docs_root
+            / "hidden.md"
+        ).write_text(
+            "private documentation\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        manifest = scan_project(
+            docs_root,
+            {
+                "IGNORE_FOLDERS": [],
+                "IGNORE_FILES": [],
+            },
+            apply_gitignore=False,
+        )
+
+        self.assertIn(
+            "hidden.md",
+            {
+                item.relative_path
+                for item in manifest.files
+            },
+        )
+
+
+    def test_scoped_scan_uses_project_relative_ignore_prefix(
+        self,
+    ) -> None:
+        docs_root = (
+            self.project
+            / "docs"
+            / "private"
+        )
+
+        archive = (
+            docs_root
+            / "archive"
+        )
+
+        archive.mkdir(
+            parents=True,
+            exist_ok=True,
+        )
+
+        (
+            docs_root
+            / "keep.md"
+        ).write_text(
+            "keep\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        (
+            archive
+            / "old.md"
+        ).write_text(
+            "old\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        manifest = scan_project(
+            docs_root,
+            {
+                "IGNORE_FOLDERS": [
+                    "docs/private/archive",
+                ],
+                "IGNORE_FILES": [],
+            },
+            apply_gitignore=False,
+            ignore_path_prefix="docs/private",
+        )
+
+        paths = {
+            item.relative_path
+            for item in manifest.files
+        }
+
+        self.assertIn(
+            "keep.md",
+            paths,
+        )
+
+        self.assertNotIn(
+            "archive/old.md",
+            paths,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

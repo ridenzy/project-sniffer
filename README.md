@@ -22,9 +22,13 @@ sniff --project /path/to/project --docs
 sniff --project /path/to/project --architecture --report --trace --docs
 ```
 
-`--architecture`, `--report`, and `--trace` are analyzers. `--docs` is an output
-capability that copies manifest-approved root-level `docs/public/**`
-content alongside generated Project Sniffer evidence.
+`--architecture`, `--report`, and `--trace` are analyzers. `--docs` is a
+separate documentation-report capability.
+
+When `--docs` is selected, Project Sniffer inspects the root-level
+`docs/public/` and `docs/private/` scopes independently and renders readable
+Markdown reports through the existing safe-reader and report-builder
+boundaries.
 
 Default output is grouped by scanned project:
 
@@ -33,14 +37,27 @@ reports/<project-name>/
 ├── <project-name>-architecture.md
 ├── <project-name>-project-report.md
 ├── <project-name>-trace.md
-└── docs/
-    └── public/
-        └── ...
+├── <project-name>-public-docs-report.md
+└── <project-name>-private-docs-report.md
 ```
 
-The `docs/public/` snapshot is created only when `--docs` is selected and
-manifest-approved public documentation exists. Relative paths below
-`docs/public/` are preserved.
+Only outputs requested and available for the current run are created.
+
+A missing `docs/public/` or `docs/private/` scope produces no report for that
+scope.
+
+Documentation-scoped scans continue to apply Project Sniffer recommended and
+personal ignore rules, as well as active output-directory exclusion. Target
+project `.gitignore` rules are intentionally not applied to these scoped
+documentation scans, allowing explicitly requested documentation such as a
+Git-ignored `docs/private/` tree to remain inspectable.
+
+If Project Sniffer configuration excludes the `docs/private/` scope, the CLI
+warns before exposing it and asks for one-run confirmation. Approval overrides
+only that private-scope exclusion for the current run; other Project Sniffer
+ignore rules remain active. Declining, submitting an empty response, or having
+no interactive response leaves the scope excluded. A stale canonical private
+documentation report is removed when that private-scope override is declined.
 
 `--output PATH` overrides the base output directory while preserving the
 project-specific subdirectory:
@@ -64,8 +81,16 @@ The existing implementation can:
 - exclude the active Project Sniffer output directory from repeat scans;
 - generate a project tree;
 - generate a readable Markdown source report;
-- copy manifest-approved root-level `docs/public/**` files byte-for-byte while
-  preserving their relative documentation structure;
+- generate separate Markdown documentation reports for root-level
+  `docs/public/` and `docs/private/` scopes;
+- run documentation scopes through the shared safe reader, source-evidence
+  metadata, and Markdown report builder rather than raw-byte copying;
+- keep Project Sniffer recommended and personal ignore rules active inside
+  documentation scopes while deliberately disabling target-project
+  `.gitignore` filtering for those scoped scans;
+- require explicit one-run approval before overriding a Project Sniffer
+  exclusion of `docs/private/`, and remove a stale canonical private report
+  when that approval is declined;
 - read source-report files through a shared safe-reader evidence boundary;
 - refuse to follow discovered file symlinks for source content;
 - distinguish escaped symlinks and reject paths outside the resolved project root;
@@ -175,10 +200,14 @@ The stable 1.0 command is planned to support five analyzers:
 
 `--all` will run all stable static analyzers.
 
-`--docs` is intentionally separate from that analyzer set. It exports
-maintained documentation that already survived the shared scan and ignore
-policy; it does not perform a second project walk and does not override
-recommended, personal, output-directory, or target `.gitignore` exclusions.
+`--docs` is intentionally separate from that analyzer set. It performs scoped
+documentation scans only for root-level `docs/public/` and `docs/private/`
+rather than requiring the canonical full-project analyzer manifest.
+
+Those scoped scans retain Project Sniffer configuration and output-directory
+safety rules but intentionally do not apply target-project `.gitignore`
+filtering. A Project Sniffer exclusion of `docs/private/` may be overridden
+only through the explicit one-run interactive confirmation described above.
 
 A deterministic `--impact` analyzer is planned after 1.0.
 

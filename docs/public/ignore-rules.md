@@ -109,26 +109,47 @@ children.
 
 This matches the documented Git behavior for excluded parent directories.
 
-## Shared scan manifest
+## Analyzer discovery versus documentation discovery
 
-Architecture generation, source-report generation, and `--docs` consume the
-same `ScanManifest`.
+Architecture generation, source-report generation, and dependency-trace
+generation consume the canonical full-project `ScanManifest`.
 
-`--docs` therefore cannot copy a `docs/public/**` file that was already
-removed by recommended rules, a matching personal profile, active output
-exclusion, or target `.gitignore` processing. It performs no second discovery
-walk and never inspects `docs/private/**` as an export source.
+`--docs` deliberately uses scoped scans rooted at `docs/public/` and
+`docs/private/` instead.
 
-`.gitignore` support does not introduce another filesystem discovery walk.
+The scoped documentation scans still use the shared Project Sniffer scanner and
+therefore retain recommended and personal folder/file rules. Their paths are
+evaluated with the appropriate project-relative documentation prefix so rules
+such as:
+
+```text
+docs/public/internal
+docs/private/archive
+*.bak
+```
+
+continue to apply in their intended project-relative context.
+
+Target-project `.gitignore` matching is deliberately disabled for these scoped
+documentation scans. `.gitignore` remains active for the canonical analyzer
+scan.
+
+If Project Sniffer configuration excludes the `docs/private/` scope itself,
+the CLI requires explicit one-run confirmation before exposing that scope.
+That override applies only to the private scope decision for the current run;
+it does not rewrite ignore configuration.
+
+Declining the override prevents private-report generation and removes an
+existing canonical private report from an earlier approved run.
 
 ## Generated output directories
 
 Project Sniffer explicitly excludes the resolved project-specific output
 directory from the shared scan.
 
-This prevents generated architecture reports, source reports, and copied
-`docs/public/**` snapshots from entering later scans when output is stored
-inside the target project.
+This prevents generated architecture reports, source reports, trace reports,
+and documentation reports from entering later applicable scans when output is
+stored inside the target project.
 
 ## Personal configuration
 

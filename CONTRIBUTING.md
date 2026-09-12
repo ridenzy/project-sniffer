@@ -49,7 +49,7 @@ The root-level `main.py` remains available as a positional compatibility entry
 point and delegates to the packaged runtime.
 
 Authoritative scanner, configuration, safe-reading, architecture,
-source-report, and public-documentation-export behavior belongs under
+source-report, and documentation-report behavior belongs under
 `src/project_sniffer/`. Do not recreate parallel root-level implementations
 of packaged runtime modules.
 
@@ -120,14 +120,14 @@ python3 -m unittest discover -s tests -p 'test_*.py' -v
 git diff --check
 ```
 
-Changes that affect scanning, report generation, or documentation export
-should also be exercised against a synthetic disposable project rather than
-against private production repositories.
+Changes that affect scanning, report generation, or documentation reporting
+should also be exercised against a synthetic disposable project before being
+accepted against a real repository.
 
-The packaged architecture analyzer, source-report analyzer, `--trace` analyzer,
-and `--docs` output capability share one scan manifest. New analyzer or output code must
-consume that shared discovery evidence rather than introducing another
-independent project walk.
+The packaged `--architecture`, `--report`, and `--trace` analyzers share the
+canonical full-project `ScanManifest` when those analyzers are selected. New
+analyzers should consume that shared discovery evidence rather than introduce
+parallel full-project discovery walks.
 
 Source-text analyzer consumers must not reopen target-project source files
 directly. Source text must pass through `project_sniffer.reading` so filesystem
@@ -135,15 +135,24 @@ containment, file-symlink handling, binary classification, oversized-file
 classification, non-regular-file refusal, unreadable-file classification, and
 control-character cleaning remain centralized.
 
-`--docs` is different by design: documentation export preserves source bytes,
-including binary documentation, and therefore must not route copies through
-the text-decoding source-report reader. `project_sniffer.docs_exporter` must
-still consume only `ScanManifest` entries, preserve ignore-policy decisions,
-reject unsafe source or destination paths, refuse file symlinks, and preserve
-the relative structure below root-level `docs/public/`.
+`--docs` has a deliberately separate discovery boundary.
+`project_sniffer.docs_reporter` performs scoped scans only for root-level
+`docs/public/` and `docs/private/`. Those scans reuse the shared scanner with
+project-relative Project Sniffer ignore semantics, active output exclusion,
+and target-project `.gitignore` processing disabled.
 
-Target-project `.gitignore` handling also belongs to that shared discovery
-layer. Do not implement separate ignore walks inside individual analyzers.
+Documentation files then pass through the same safe-reader,
+`SourceEvidence`, and Markdown report-builder boundaries used elsewhere.
+Do not reintroduce the removed raw-byte documentation-copy path or a parallel
+`docs_exporter` implementation.
+
+If Project Sniffer configuration excludes `docs/private/`, exposing that scope
+must remain an explicit one-run decision. Declining the override must not leave
+a stale canonical private documentation report behind.
+
+Target-project `.gitignore` handling remains part of the canonical analyzer
+scan. It must not silently be reintroduced into documentation-scoped scans
+without deliberately changing the documented `--docs` contract and its tests.
 
 Keep these baseline commands aligned with the packaged runtime as additional
 analyzers and validation tools are introduced.

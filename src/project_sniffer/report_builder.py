@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from project_sniffer.evidence import (
@@ -14,6 +15,19 @@ from project_sniffer.reading import (
 
 
 OUTPUT_PATH = "reports/project-report.md"
+
+
+@dataclass(frozen=True)
+class ReportBuildSummary:
+    output_path: Path
+    added_files: int
+    skipped_ignored_files: int
+    skipped_binary_files: int
+    skipped_oversized_files: int
+    skipped_unreadable_files: int
+    skipped_symlink_files: int
+    skipped_unsafe_path_files: int
+    skipped_markdown_error_files: int
 
 
 def get_safe_markdown_fence(
@@ -128,7 +142,12 @@ def build_report(
     project_path: str | Path,
     source_evidence: Sequence[SourceEvidence],
     output_path: str | Path = OUTPUT_PATH,
-) -> None:
+    *,
+    report_title: str = "Project Report",
+    project_name: str | None = None,
+    source_root_label: str | None = None,
+    print_summary: bool = True,
+) -> ReportBuildSummary:
     """
     Generate a Markdown source report from shared source evidence.
 
@@ -146,16 +165,26 @@ def build_report(
         .resolve()
     )
 
-    project_name = (
-        project_root.name
+    resolved_project_name = (
+        project_name
+        or project_root.name
         or "root"
     )
 
     report_sections = [
-        "# Project Report\n\n",
-        f"**Project:** `{project_name}`\n\n",
-        "---\n\n",
+        f"# {report_title}\n\n",
+        f"**Project:** `{resolved_project_name}`\n\n",
     ]
+
+    if source_root_label is not None:
+        report_sections.append(
+            "**Documentation root:** "
+            f"`{source_root_label}`\n\n"
+        )
+
+    report_sections.append(
+        "---\n\n"
+    )
 
     added_files = 0
 
@@ -333,42 +362,59 @@ def build_report(
         newline="\n",
     )
 
-    print(
-        "\nReport summary:"
+    summary = ReportBuildSummary(
+        output_path=output,
+        added_files=added_files,
+        skipped_ignored_files=skipped_ignored,
+        skipped_binary_files=skipped_binary,
+        skipped_oversized_files=skipped_oversized,
+        skipped_unreadable_files=skipped_unreadable,
+        skipped_symlink_files=skipped_symlink,
+        skipped_unsafe_path_files=skipped_unsafe_path,
+        skipped_markdown_error_files=(
+            skipped_markdown_error
+        ),
     )
-    print(
-        f"  Added text files: "
-        f"{added_files}"
-    )
-    print(
-        f"  Skipped ignored files: "
-        f"{skipped_ignored}"
-    )
-    print(
-        f"  Skipped binary files: "
-        f"{skipped_binary}"
-    )
-    print(
-        f"  Skipped oversized files: "
-        f"{skipped_oversized}"
-    )
-    print(
-        f"  Skipped unreadable files: "
-        f"{skipped_unreadable}"
-    )
-    print(
-        f"  Skipped symlink files: "
-        f"{skipped_symlink}"
-    )
-    print(
-        f"  Skipped unsafe-path files: "
-        f"{skipped_unsafe_path}"
-    )
-    print(
-        f"  Skipped markdown-error files: "
-        f"{skipped_markdown_error}"
-    )
-    print(
-        f"  Report saved to: "
-        f"{output}"
-    )
+
+    if print_summary:
+        print(
+            "\nReport summary:"
+        )
+        print(
+            f"  Added text files: "
+            f"{summary.added_files}"
+        )
+        print(
+            f"  Skipped ignored files: "
+            f"{summary.skipped_ignored_files}"
+        )
+        print(
+            f"  Skipped binary files: "
+            f"{summary.skipped_binary_files}"
+        )
+        print(
+            f"  Skipped oversized files: "
+            f"{summary.skipped_oversized_files}"
+        )
+        print(
+            f"  Skipped unreadable files: "
+            f"{summary.skipped_unreadable_files}"
+        )
+        print(
+            f"  Skipped symlink files: "
+            f"{summary.skipped_symlink_files}"
+        )
+        print(
+            f"  Skipped unsafe-path files: "
+            f"{summary.skipped_unsafe_path_files}"
+        )
+        print(
+            f"  Skipped markdown-error files: "
+            f"{summary.skipped_markdown_error_files}"
+        )
+        print(
+            f"  Report saved to: "
+            f"{summary.output_path}"
+        )
+
+    return summary

@@ -149,19 +149,55 @@ target `.gitignore` rules.
 
 ## Effect on `--docs`
 
-`--docs` is not an ignore override. It copies only root-level
-`docs/public/**` files that already survived configuration rules, active
-output-directory exclusion, and the target project's `.gitignore` hierarchy
-into the canonical `ScanManifest`.
+`--docs` has its own scoped documentation discovery path.
 
-For example, a personal `IGNORE_FOLDERS` rule of `docs` removes the entire
-`docs/` subtree before `--docs` runs. A narrower `docs/public/internal`
-rule removes only that subtree. The exporter does not perform a fallback
-filesystem walk to recover excluded documentation.
+When selected, Project Sniffer checks the root-level:
 
-`docs/private/**` is never selected for documentation export because
-`--docs` only accepts manifest paths beginning with root-level
-`docs/public/`.
+```text
+docs/public/
+docs/private/
+```
+
+scopes independently.
+
+Each existing scope is scanned through the shared scanner with its
+project-relative documentation prefix, so Project Sniffer recommended and
+personal ignore rules continue to apply to files and nested directories inside
+that scope.
+
+Active Project Sniffer output-directory exclusion also remains active.
+
+Target-project `.gitignore` processing is deliberately disabled during these
+documentation-scoped scans. This is different from the canonical analyzer
+scan. In particular, a Git-ignored `docs/private/` directory can still be
+considered when the user explicitly requests `--docs`.
+
+A Project Sniffer configuration rule that excludes the `docs/private/` scope
+receives additional protection. The CLI warns that private or sensitive
+documentation may be included and asks:
+
+```text
+Generate the docs/private/ report? [y/N]:
+```
+
+`y` or `yes` approves a one-run override of that private-scope exclusion.
+
+`n`, `no`, an empty response, or an unavailable interactive response keeps the
+scope excluded. If a canonical private documentation report exists from an
+earlier approved run, declining the override removes that stale report.
+
+The confirmation does not edit `personal_ignores.json`, target `.gitignore`,
+or any target-project documentation. Other Project Sniffer ignore rules
+continue to participate in the scoped scan.
+
+The canonical outputs are:
+
+```text
+<project-name>-public-docs-report.md
+<project-name>-private-docs-report.md
+```
+
+A physically missing documentation scope produces no report for that scope.
 
 ## Planned project-owned configuration
 
