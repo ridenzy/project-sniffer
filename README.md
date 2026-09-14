@@ -142,7 +142,15 @@ The existing implementation can:
 - render shadowed calls separately from potential internal call candidates.
 - positively confirm direct-name calls backed by one unique resolved internal
   `from ... import ...` binding whose compiler symbol-table entry has not been
-  reassigned;
+  reassigned and whose binding order is compatible with the call site;
+- positively confirm a conservative class of same-file direct-name calls when
+  one unique undecorated top-level function, async-function, or class binding is
+  statically stable and available before an immediately evaluated call site;
+- use already-read Python AST evidence to reject positive proof when explicit
+  rebinding, unsafe binding order, or currently unmodelled lambda/comprehension
+  shadowing makes the relationship uncertain;
+- retain explicit `INTERNAL_IMPORT_BINDING` and
+  `SAME_FILE_STABLE_BINDING` proof provenance on positively confirmed calls;
 - distinguish confirmed internal calls from potential, shadowed, ambiguous,
   unresolved, and dynamic call evidence;
 - render confirmed caller scope and target-symbol relationships through

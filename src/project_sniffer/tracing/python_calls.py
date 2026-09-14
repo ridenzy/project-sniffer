@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import symtable
 
 from collections.abc import Sequence
@@ -14,6 +15,7 @@ from project_sniffer.indexing import (
 from project_sniffer.parsing import (
     CallTargetKind,
     DynamicCallKind,
+    SymbolKind,
 )
 from project_sniffer.tracing.models import (
     CallResolution,
@@ -172,6 +174,9 @@ def _confirmed_import_target(
     *,
     root: symtable.SymbolTable | None,
     target_name: str,
+    call_scope: str | None,
+    call_line: int,
+    call_executes_during_module_initialization: bool,
     ordered_candidates: tuple[
         CallTarget,
         ...,
@@ -215,6 +220,27 @@ def _confirmed_import_target(
         matching_bindings[0]
     )
 
+    binding_scope = (
+        resolution.evidence.scope
+    )
+
+    binding_must_precede_call = (
+        binding_scope == call_scope
+        or (
+            binding_scope is None
+            and (
+                call_executes_during_module_initialization
+            )
+        )
+    )
+
+    if (
+        binding_must_precede_call
+        and resolution.evidence.line
+        >= call_line
+    ):
+        return None, None
+
     symbol = _binding_symbol(
         root,
         resolution.evidence.scope,
@@ -240,6 +266,683 @@ def _confirmed_import_target(
         (
             CallResolutionProof
             .INTERNAL_IMPORT_BINDING
+        ),
+    )
+
+def _python_syntax_trees_by_path(
+    index: SemanticProjectIndex,
+) -> dict[str, ast.Module]:
+    """
+    Build Python ASTs from source text already held in memory.
+
+    This performs no filesystem reads and does not execute target code.
+    """
+
+    trees: dict[
+        str,
+        ast.Module,
+    ] = {}
+
+    for parsed in index.parsed_sources:
+        if (
+            parsed.source.language
+            is not SourceLanguage.PYTHON
+        ):
+            continue
+
+        content = (
+            parsed
+            .source
+            .read_result
+            .content
+        )
+
+        if content is None:
+            continue
+
+        source_path = (
+            parsed
+            .source
+            .read_result
+            .scanned_file
+            .relative_path
+        )
+
+        try:
+            trees[source_path] = (
+                ast.parse(
+                    content,
+                    filename=source_path,
+                    type_comments=True,
+                )
+            )
+
+        except SyntaxError:
+            continue
+
+    return trees
+
+def _ast_parent_map(
+    tree: ast.AST,
+) -> dict[
+    ast.AST,
+    ast.AST,
+]:
+    return {
+        child: parent
+        for parent in ast.walk(
+            tree
+        )
+        for child in ast.iter_child_nodes(
+            parent
+        )
+    }
+
+def _call_executes_during_module_initialization(
+    *,
+    tree: ast.Module | None,
+    target_name: str,
+    call_line: int,
+) -> bool:
+    """
+    Return True when a matching call is evaluated during module/class
+    definition execution rather than from a deferred function or lambda body.
+
+    This is deliberately not whole-program call-flow analysis. Calls inside
+    function and lambda bodies are treated as deferred because their invocation
+    timing is not proven at this stage.
+    """
+
+    if tree is None:
+        return False
+
+    parent_by_child = (
+        _ast_parent_map(
+            tree
+        )
+    )
+
+    for node in ast.walk(
+        tree
+    ):
+        if (
+            not isinstance(
+                node,
+                ast.Call,
+            )
+            or node.lineno != call_line
+            or not isinstance(
+                node.func,
+                ast.Name,
+            )
+            or node.func.id != target_name
+        ):
+            continue
+
+        child: ast.AST = node
+        parent = parent_by_child.get(
+            node
+        )
+        deferred = False
+
+        while parent is not None:
+            if isinstance(
+                parent,
+                (
+                    ast.FunctionDef,
+                    ast.AsyncFunctionDef,
+                ),
+            ):
+                if any(
+                    child is statement
+                    for statement in parent.body
+                ):
+                    deferred = True
+                    break
+
+            if (
+                isinstance(
+                    parent,
+                    ast.Lambda,
+                )
+                and child is parent.body
+            ):
+                deferred = True
+                break
+
+            child = parent
+            parent = parent_by_child.get(
+                parent
+            )
+
+        if not deferred:
+            return True
+
+    return False
+
+def _lambda_binds_name(
+    node: ast.Lambda,
+    name: str,
+) -> bool:
+    arguments = node.args
+
+    for argument in (
+        *arguments.posonlyargs,
+        *arguments.args,
+        *arguments.kwonlyargs,
+    ):
+        if argument.arg == name:
+            return True
+
+    if (
+        arguments.vararg is not None
+        and arguments.vararg.arg == name
+    ):
+        return True
+
+    if (
+        arguments.kwarg is not None
+        and arguments.kwarg.arg == name
+    ):
+        return True
+
+    return False
+
+
+def _comprehension_binds_name(
+    node: (
+        ast.ListComp
+        | ast.SetComp
+        | ast.DictComp
+        | ast.GeneratorExp
+    ),
+    name: str,
+) -> bool:
+    for generator in node.generators:
+        for target in ast.walk(
+            generator.target
+        ):
+            if (
+                isinstance(
+                    target,
+                    ast.Name,
+                )
+                and target.id == name
+                and isinstance(
+                    target.ctx,
+                    ast.Store,
+                )
+            ):
+                return True
+
+    return False
+
+
+def _call_has_unmodeled_scope_shadow(
+    *,
+    tree: ast.Module | None,
+    target_name: str,
+    call_line: int,
+) -> bool:
+    """
+    Conservatively block positive call proof when the matching call is nested
+    under a lambda or comprehension binding that CallEvidence.scope does not
+    currently represent.
+    """
+
+    if tree is None:
+        return False
+
+    parent_by_child = (
+        _ast_parent_map(
+            tree
+        )
+    )
+
+    for node in ast.walk(
+        tree
+    ):
+        if not isinstance(
+            node,
+            ast.Call,
+        ):
+            continue
+
+        if node.lineno != call_line:
+            continue
+
+        if (
+            not isinstance(
+                node.func,
+                ast.Name,
+            )
+            or node.func.id != target_name
+        ):
+            continue
+
+        parent = parent_by_child.get(
+            node
+        )
+
+        while parent is not None:
+            if (
+                isinstance(
+                    parent,
+                    ast.Lambda,
+                )
+                and _lambda_binds_name(
+                    parent,
+                    target_name,
+                )
+            ):
+                return True
+
+            if (
+                isinstance(
+                    parent,
+                    (
+                        ast.ListComp,
+                        ast.SetComp,
+                        ast.DictComp,
+                        ast.GeneratorExp,
+                    ),
+                )
+                and _comprehension_binds_name(
+                    parent,
+                    target_name,
+                )
+            ):
+                return True
+
+            parent = parent_by_child.get(
+                parent
+            )
+
+    return False
+
+
+def _executes_in_module_scope(
+    node: ast.AST,
+    parent_by_child: dict[
+        ast.AST,
+        ast.AST,
+    ],
+) -> bool:
+    parent = parent_by_child.get(
+        node
+    )
+
+    while parent is not None:
+        if isinstance(
+            parent,
+            (
+                ast.FunctionDef,
+                ast.AsyncFunctionDef,
+                ast.Lambda,
+                ast.ClassDef,
+            ),
+        ):
+            return False
+
+        if isinstance(
+            parent,
+            ast.Module,
+        ):
+            return True
+
+        parent = parent_by_child.get(
+            parent
+        )
+
+    return False
+
+
+def _module_binding_sites(
+    tree: ast.Module,
+    name: str,
+) -> tuple[
+    tuple[str, int],
+    ...,
+]:
+    """
+    Find direct syntactic bindings that can affect a module name.
+
+    Nested function/class-local bindings are ignored. Assignment expressions
+    are treated conservatively wherever they occur.
+    """
+
+    parent_by_child = (
+        _ast_parent_map(
+            tree
+        )
+    )
+
+    sites: list[
+        tuple[str, int]
+    ] = []
+
+    for node in ast.walk(
+        tree
+    ):
+        if (
+            isinstance(
+                node,
+                ast.NamedExpr,
+            )
+            and isinstance(
+                node.target,
+                ast.Name,
+            )
+            and node.target.id == name
+        ):
+            sites.append(
+                (
+                    "named_expression",
+                    node.lineno,
+                )
+            )
+
+            continue
+
+        if not _executes_in_module_scope(
+            node,
+            parent_by_child,
+        ):
+            continue
+
+        if isinstance(
+            node,
+            (
+                ast.FunctionDef,
+                ast.AsyncFunctionDef,
+                ast.ClassDef,
+            ),
+        ):
+            if node.name == name:
+                sites.append(
+                    (
+                        "definition",
+                        node.lineno,
+                    )
+                )
+
+            continue
+
+        if isinstance(
+            node,
+            ast.Import,
+        ):
+            for alias in node.names:
+                bound_name = (
+                    alias.asname
+                    or alias.name.split(
+                        "."
+                    )[0]
+                )
+
+                if bound_name == name:
+                    sites.append(
+                        (
+                            "import",
+                            node.lineno,
+                        )
+                    )
+
+            continue
+
+        if isinstance(
+            node,
+            ast.ImportFrom,
+        ):
+            for alias in node.names:
+                if alias.name == "*":
+                    sites.append(
+                        (
+                            "star_import",
+                            node.lineno,
+                        )
+                    )
+
+                    continue
+
+                bound_name = (
+                    alias.asname
+                    or alias.name
+                )
+
+                if bound_name == name:
+                    sites.append(
+                        (
+                            "import",
+                            node.lineno,
+                        )
+                    )
+
+            continue
+
+        if (
+            isinstance(
+                node,
+                ast.Name,
+            )
+            and node.id == name
+            and isinstance(
+                node.ctx,
+                (
+                    ast.Store,
+                    ast.Del,
+                ),
+            )
+        ):
+            sites.append(
+                (
+                    "name_binding",
+                    node.lineno,
+                )
+            )
+
+            continue
+
+        if (
+            isinstance(
+                node,
+                ast.ExceptHandler,
+            )
+            and node.name == name
+        ):
+            sites.append(
+                (
+                    "exception_binding",
+                    node.lineno,
+                )
+            )
+
+            continue
+
+        if (
+            isinstance(
+                node,
+                ast.MatchAs,
+            )
+            and node.name == name
+        ):
+            sites.append(
+                (
+                    "match_binding",
+                    node.lineno,
+                )
+            )
+
+            continue
+
+        if (
+            isinstance(
+                node,
+                ast.MatchStar,
+            )
+            and node.name == name
+        ):
+            sites.append(
+                (
+                    "match_binding",
+                    node.lineno,
+                )
+            )
+
+            continue
+
+        if (
+            isinstance(
+                node,
+                ast.MatchMapping,
+            )
+            and node.rest == name
+        ):
+            sites.append(
+                (
+                    "match_binding",
+                    node.lineno,
+                )
+            )
+
+    return tuple(
+        sites
+    )
+
+
+def _definition_matches_target(
+    node: ast.stmt,
+    target: CallTarget,
+) -> bool:
+    if (
+        getattr(
+            node,
+            "lineno",
+            None,
+        )
+        != target.line
+    ):
+        return False
+
+    if isinstance(
+        node,
+        ast.FunctionDef,
+    ):
+        return (
+            node.name
+            == target.qualified_name
+            and target.kind
+            is SymbolKind.FUNCTION
+        )
+
+    if isinstance(
+        node,
+        ast.AsyncFunctionDef,
+    ):
+        return (
+            node.name
+            == target.qualified_name
+            and target.kind
+            is SymbolKind.ASYNC_FUNCTION
+        )
+
+    if isinstance(
+        node,
+        ast.ClassDef,
+    ):
+        return (
+            node.name
+            == target.qualified_name
+            and target.kind
+            is SymbolKind.CLASS
+        )
+
+    return False
+
+
+def _confirmed_same_file_target(
+    *,
+    tree: ast.Module | None,
+    target_name: str,
+    call_line: int,
+    call_executes_during_module_initialization: bool,
+    ordered_candidates: tuple[
+        CallTarget,
+        ...,
+    ],
+    same_file_candidates: Sequence[
+        CallTarget
+    ],
+) -> tuple[
+    CallTarget | None,
+    CallResolutionProof | None,
+]:
+    if (
+        tree is None
+        or len(
+            ordered_candidates
+        ) != 1
+    ):
+        return None, None
+
+    target = ordered_candidates[0]
+
+    matching_same_file_targets = tuple(
+        candidate
+        for candidate
+        in same_file_candidates
+        if candidate == target
+    )
+
+    if len(
+        matching_same_file_targets
+    ) != 1:
+        return None, None
+
+    if (
+        call_executes_during_module_initialization
+        and target.line >= call_line
+    ):
+        return None, None
+
+    definition = next(
+        (
+            node
+            for node in tree.body
+            if _definition_matches_target(
+                node,
+                target,
+            )
+        ),
+        None,
+    )
+
+    if definition is None:
+        return None, None
+
+    if definition.decorator_list:
+        return None, None
+
+    binding_sites = (
+        _module_binding_sites(
+            tree,
+            target_name,
+        )
+    )
+
+    if binding_sites != (
+        (
+            "definition",
+            target.line,
+        ),
+    ):
+        return None, None
+
+    return (
+        target,
+        (
+            CallResolutionProof
+            .SAME_FILE_STABLE_BINDING
         ),
     )
 
@@ -440,6 +1143,12 @@ def resolve_python_calls(
 
     symbol_tables = (
         _symbol_tables_by_path(
+            index
+        )
+    )
+
+    syntax_trees = (
+        _python_syntax_trees_by_path(
             index
         )
     )
@@ -686,22 +1395,72 @@ def resolve_python_calls(
             )
         )
 
-        resolved_target, proof = (
-            _confirmed_import_target(
-                root=(
-                    symbol_tables.get(
-                        source_path
-                    )
+        call_executes_during_module_initialization = (
+            _call_executes_during_module_initialization(
+                tree=syntax_trees.get(
+                    source_path
                 ),
                 target_name=target_name,
-                ordered_candidates=(
-                    ordered_candidates
-                ),
-                imported_bindings=(
-                    imported_bindings
-                ),
+                call_line=evidence.line,
             )
         )
+
+        unmodeled_scope_shadow = (
+            _call_has_unmodeled_scope_shadow(
+                tree=syntax_trees.get(
+                    source_path
+                ),
+                target_name=target_name,
+                call_line=evidence.line,
+            )
+        )
+
+        if unmodeled_scope_shadow:
+            resolved_target = None
+            proof = None
+
+        else:
+            resolved_target, proof = (
+                _confirmed_import_target(
+                    root=(
+                        symbol_tables.get(
+                            source_path
+                        )
+                    ),
+                    target_name=target_name,
+                    call_scope=evidence.scope,
+                    call_line=evidence.line,
+                    call_executes_during_module_initialization=(
+                        call_executes_during_module_initialization
+                    ),
+                    ordered_candidates=(
+                        ordered_candidates
+                    ),
+                    imported_bindings=(
+                        imported_bindings
+                    ),
+                )
+            )
+
+            if resolved_target is None:
+                resolved_target, proof = (
+                    _confirmed_same_file_target(
+                        tree=syntax_trees.get(
+                            source_path
+                        ),
+                        target_name=target_name,
+                        call_line=evidence.line,
+                        call_executes_during_module_initialization=(
+                            call_executes_during_module_initialization
+                        ),
+                        ordered_candidates=(
+                            ordered_candidates
+                        ),
+                        same_file_candidates=(
+                            same_file_candidates
+                        ),
+                    )
+                )
 
         if resolved_target is not None:
             status = (

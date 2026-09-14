@@ -42,6 +42,10 @@ class CallResolutionProof(
         "internal_import_binding"
     )
 
+    SAME_FILE_STABLE_BINDING = (
+        "same_file_stable_binding"
+    )
+
 class CallShadowReason(
     str,
     Enum,

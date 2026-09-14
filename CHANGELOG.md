@@ -90,6 +90,12 @@ The project is still in pre-1.0 development.
   nonlocals, closure/free bindings, and other local bindings.
 - Positive static proof for stable internal Python `from ... import ...`
   call bindings, producing explicit `RESOLVED_INTERNAL` call outcomes.
+- Positive static proof for stable same-file Python direct-name bindings,
+  producing `RESOLVED_INTERNAL` outcomes with explicit
+  `SAME_FILE_STABLE_BINDING` provenance.
+- Conservative AST-based binding checks for same-file definitions, module and
+  local import ordering, module-initialization timing, and implicit lambda or
+  comprehension shadowing before a call may be positively confirmed.
 - Confirmed Python `CALL` dependency edges with caller scope, target symbol,
   source location, and proof provenance.
 - Deterministic confirmed-call indexing derived only from existing `CALL`

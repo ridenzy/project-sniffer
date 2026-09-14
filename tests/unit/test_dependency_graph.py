@@ -205,7 +205,7 @@ class DependencyGraphTests(
             (),
         )
 
-    def test_potential_same_file_call_does_not_become_edge(
+    def test_stable_same_file_call_becomes_dependency_edge(
         self,
     ) -> None:
         graph = self.graph(
@@ -232,11 +232,50 @@ class DependencyGraphTests(
             graph.call_resolutions[0].status,
             (
                 CallResolutionStatus
-                .POTENTIAL_INTERNAL
+                .RESOLVED_INTERNAL
             ),
         )
 
         self.assertEqual(
-            graph.edges,
-            (),
+            len(
+                graph.edges
+            ),
+            1,
+        )
+
+        edge = graph.edges[0]
+
+        self.assertIs(
+            edge.kind,
+            DependencyKind.CALL,
+        )
+
+        self.assertEqual(
+            edge.source_path,
+            "pkg/app.py",
+        )
+
+        self.assertEqual(
+            edge.target_path,
+            "pkg/app.py",
+        )
+
+        self.assertEqual(
+            edge.target_symbol,
+            "helper",
+        )
+
+        self.assertEqual(
+            edge.scope,
+            "run",
+        )
+
+        self.assertEqual(
+            edge.line,
+            5,
+        )
+
+        self.assertIs(
+            edge.resolution,
+            graph.call_resolutions[0],
         )

@@ -19,6 +19,7 @@ from project_sniffer.scanning import (
 )
 from project_sniffer.tracing import (
     CallEndpoint,
+    CallResolutionStatus,
     DependencyKind,
     build_call_index,
     build_dependency_graph,
@@ -194,19 +195,36 @@ class CallIndexTests(
                     "def helper():\n"
                     "    return True\n"
                     "\n"
+                    "helper = replacement\n"
+                    "\n"
                     "def run():\n"
                     "    return helper()\n"
                 ),
             ),
         )
 
-        call_index = build_call_index(
-            graph
+        self.assertEqual(
+            len(
+                graph.call_resolutions
+            ),
+            1,
+        )
+
+        self.assertIs(
+            graph.call_resolutions[0].status,
+            (
+                CallResolutionStatus
+                .POTENTIAL_INTERNAL
+            ),
         )
 
         self.assertEqual(
             graph.edges,
             (),
+        )
+
+        call_index = build_call_index(
+            graph
         )
 
         self.assertEqual(

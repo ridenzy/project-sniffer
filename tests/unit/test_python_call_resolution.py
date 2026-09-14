@@ -86,12 +86,13 @@ class PythonCallResolutionTests(
             import_resolutions,
         )
 
-    def test_same_file_top_level_symbol_is_potential_candidate(
+    def test_stable_same_file_top_level_bindings_are_resolved_internal(
         self,
     ) -> None:
-        resolutions = self.resolve(
-            self.evidence(
-                "pkg/app.py",
+        cases = (
+            (
+                "function",
+                "helper",
                 (
                     "def helper():\n"
                     "    return True\n"
@@ -100,39 +101,329 @@ class PythonCallResolutionTests(
                     "    return helper()\n"
                 ),
             ),
-        )
-
-        resolution = resolutions[0]
-
-        self.assertIs(
-            resolution.status,
             (
-                CallResolutionStatus
-                .POTENTIAL_INTERNAL
+                "async_function",
+                "helper",
+                (
+                    "async def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    return helper()\n"
+                ),
+            ),
+            (
+                "class",
+                "Worker",
+                (
+                    "class Worker:\n"
+                    "    pass\n"
+                    "\n"
+                    "def run():\n"
+                    "    return Worker()\n"
+                ),
             ),
         )
 
-        self.assertEqual(
-            len(
-                resolution.candidate_targets
+        for (
+            case_name,
+            target_name,
+            source,
+        ) in cases:
+            with self.subTest(
+                case=case_name
+            ):
+                resolution = self.resolve(
+                    self.evidence(
+                        "pkg/app.py",
+                        source,
+                    ),
+                )[0]
+
+                self.assertIs(
+                    resolution.status,
+                    (
+                        CallResolutionStatus
+                        .RESOLVED_INTERNAL
+                    ),
+                )
+
+                self.assertIsNotNone(
+                    resolution.resolved_target
+                )
+
+                self.assertEqual(
+                    (
+                        resolution
+                        .resolved_target
+                        .source_path
+                    ),
+                    "pkg/app.py",
+                )
+
+                self.assertEqual(
+                    (
+                        resolution
+                        .resolved_target
+                        .qualified_name
+                    ),
+                    target_name,
+                )
+
+                self.assertIs(
+                    resolution.proof,
+                    (
+                        CallResolutionProof
+                        .SAME_FILE_STABLE_BINDING
+                    ),
+                )
+
+                self.assertEqual(
+                    len(
+                        resolution
+                        .candidate_targets
+                    ),
+                    1,
+                )
+
+    def test_unstable_same_file_bindings_remain_potential(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "module_assignment",
+                (
+                    "def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "helper = replacement\n"
+                    "\n"
+                    "def run():\n"
+                    "    return helper()\n"
+                ),
             ),
-            1,
+            (
+                "module_import",
+                (
+                    "def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "import external as helper\n"
+                    "\n"
+                    "def run():\n"
+                    "    return helper()\n"
+                ),
+            ),
+            (
+                "star_import",
+                (
+                    "def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "from external import *\n"
+                    "\n"
+                    "def run():\n"
+                    "    return helper()\n"
+                ),
+            ),
+            (
+                "decorated_definition",
+                (
+                    "@decorate\n"
+                    "def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    return helper()\n"
+                ),
+            ),
+            (
+                "conditional_definition",
+                (
+                    "if enabled:\n"
+                    "    def helper():\n"
+                    "        return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    return helper()\n"
+                ),
+            ),
+            (
+                "lambda_parameter",
+                (
+                    "def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "callback = "
+                    "lambda helper: helper()\n"
+                ),
+            ),
+            (
+                "comprehension_target",
+                (
+                    "def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "callbacks = [\n"
+                    "    helper()\n"
+                    "    for helper in factories\n"
+                    "]\n"
+                ),
+            ),
+            (
+                "module_call_before_definition",
+                (
+                    "result = helper()\n"
+                    "\n"
+                    "def helper():\n"
+                    "    return True\n"
+                ),
+            ),
+            (
+                "decorator_call_before_definition",
+                (
+                    "@helper()\n"
+                    "def run():\n"
+                    "    return True\n"
+                    "\n"
+                    "def helper():\n"
+                    "    return True\n"
+                ),
+            ),
+            (
+                "default_call_before_definition",
+                (
+                    "def run(value=helper()):\n"
+                    "    return value\n"
+                    "\n"
+                    "def helper():\n"
+                    "    return True\n"
+                ),
+            ),
         )
 
-        target = (
-            resolution
-            .candidate_targets[0]
+        for case_name, source in cases:
+            with self.subTest(
+                case=case_name
+            ):
+                resolution = self.resolve(
+                    self.evidence(
+                        "pkg/app.py",
+                        source,
+                    ),
+                )[0]
+
+                self.assertIs(
+                    resolution.status,
+                    (
+                        CallResolutionStatus
+                        .POTENTIAL_INTERNAL
+                    ),
+                )
+
+                self.assertIsNone(
+                    resolution.resolved_target
+                )
+
+                self.assertIsNone(
+                    resolution.proof
+                )
+
+                self.assertEqual(
+                    len(
+                        resolution
+                        .candidate_targets
+                    ),
+                    1,
+                )
+
+    def test_unmodeled_implicit_scope_shadow_prevents_import_confirmation(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "lambda_parameter",
+                (
+                    "callback = "
+                    "lambda Worker: Worker()\n"
+                ),
+            ),
+            (
+                "comprehension_target",
+                (
+                    "instances = [\n"
+                    "    Worker()\n"
+                    "    for Worker in factories\n"
+                    "]\n"
+                ),
+            ),
         )
 
-        self.assertEqual(
-            target.source_path,
-            "pkg/app.py",
-        )
+        for case_name, body in cases:
+            with self.subTest(
+                case=case_name
+            ):
+                resolutions = self.resolve(
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "from .worker "
+                            "import Worker\n"
+                            + body
+                        ),
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "class Worker:\n"
+                            "    pass\n"
+                        ),
+                    ),
+                )
 
-        self.assertEqual(
-            target.qualified_name,
-            "helper",
-        )
+                self.assertEqual(
+                    len(
+                        resolutions
+                    ),
+                    1,
+                )
+
+                resolution = (
+                    resolutions[0]
+                )
+
+                self.assertIs(
+                    resolution.status,
+                    (
+                        CallResolutionStatus
+                        .POTENTIAL_INTERNAL
+                    ),
+                )
+
+                self.assertIsNone(
+                    resolution.resolved_target
+                )
+
+                self.assertIsNone(
+                    resolution.proof
+                )
+
+                self.assertEqual(
+                    len(
+                        resolution
+                        .candidate_targets
+                    ),
+                    1,
+                )
+
+                self.assertEqual(
+                    (
+                        resolution
+                        .candidate_targets[0]
+                        .source_path
+                    ),
+                    "pkg/worker.py",
+                )
 
     def test_stable_imported_symbol_is_resolved_internal(
         self,
@@ -608,7 +899,7 @@ class PythonCallResolutionTests(
             CallShadowReason.NONLOCAL,
         )
 
-    def test_global_declaration_does_not_shadow_module_candidate(
+    def test_global_declaration_preserves_stable_module_binding(
         self,
     ) -> None:
         resolutions = self.resolve(
@@ -631,7 +922,7 @@ class PythonCallResolutionTests(
             resolution.status,
             (
                 CallResolutionStatus
-                .POTENTIAL_INTERNAL
+                .RESOLVED_INTERNAL
             ),
         )
 
@@ -639,11 +930,16 @@ class PythonCallResolutionTests(
             resolution.shadowed_by
         )
 
-        self.assertEqual(
-            len(
-                resolution.candidate_targets
+        self.assertIsNotNone(
+            resolution.resolved_target
+        )
+
+        self.assertIs(
+            resolution.proof,
+            (
+                CallResolutionProof
+                .SAME_FILE_STABLE_BINDING
             ),
-            1,
         )
 
     def test_local_internal_import_is_resolved_internal(
@@ -698,12 +994,13 @@ class PythonCallResolutionTests(
             ),
         )
 
-    def test_module_import_reassignment_prevents_confirmation(
+
+    def test_unstable_internal_import_bindings_remain_potential(
         self,
     ) -> None:
-        resolutions = self.resolve(
-            self.evidence(
-                "pkg/app.py",
+        cases = (
+            (
+                "reassigned_module_binding",
                 (
                     "from .worker import Worker\n"
                     "Worker = replacement\n"
@@ -712,32 +1009,95 @@ class PythonCallResolutionTests(
                     "    return Worker()\n"
                 ),
             ),
-            self.evidence(
-                "pkg/worker.py",
+            (
+                "module_call_before_import",
                 (
-                    "class Worker:\n"
-                    "    pass\n"
+                    "instance = Worker()\n"
+                    "from .worker import Worker\n"
+                ),
+            ),
+            (
+                "local_call_before_import",
+                (
+                    "def run():\n"
+                    "    instance = Worker()\n"
+                    "    from .worker import Worker\n"
+                    "    return instance\n"
+                ),
+            ),
+            (
+                "decorator_call_before_import",
+                (
+                    "@Worker()\n"
+                    "def run():\n"
+                    "    return True\n"
+                    "\n"
+                    "from .worker import Worker\n"
+                ),
+            ),
+            (
+                "default_call_before_import",
+                (
+                    "def run(value=Worker()):\n"
+                    "    return value\n"
+                    "\n"
+                    "from .worker import Worker\n"
                 ),
             ),
         )
 
-        resolution = resolutions[0]
+        for case_name, source in cases:
+            with self.subTest(
+                case=case_name
+            ):
+                resolutions = self.resolve(
+                    self.evidence(
+                        "pkg/app.py",
+                        source,
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "class Worker:\n"
+                            "    pass\n"
+                        ),
+                    ),
+                )
 
-        self.assertIs(
-            resolution.status,
-            (
-                CallResolutionStatus
-                .POTENTIAL_INTERNAL
-            ),
-        )
+                self.assertEqual(
+                    len(
+                        resolutions
+                    ),
+                    1,
+                )
 
-        self.assertIsNone(
-            resolution.resolved_target
-        )
+                resolution = (
+                    resolutions[0]
+                )
 
-        self.assertIsNone(
-            resolution.proof
-        )
+                self.assertIs(
+                    resolution.status,
+                    (
+                        CallResolutionStatus
+                        .POTENTIAL_INTERNAL
+                    ),
+                )
+
+                self.assertIsNone(
+                    resolution.resolved_target
+                )
+
+                self.assertIsNone(
+                    resolution.proof
+                )
+
+                self.assertEqual(
+                    len(
+                        resolution
+                        .candidate_targets
+                    ),
+                    1,
+                )
 
 if __name__ == "__main__":
     unittest.main()

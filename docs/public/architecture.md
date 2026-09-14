@@ -302,9 +302,9 @@ Named function/class scopes can therefore reject candidate targets when the
 compiler identifies the called name as a parameter, assignment, local import,
 nonlocal, free closure binding, or other local binding.
 
-These outcomes are recorded as `SHADOWED`. This improves false-positive
-rejection but still does not promote remaining `POTENTIAL_INTERNAL` candidates
-to confirmed call edges.
+These outcomes are recorded as `SHADOWED`. Shadowed candidates remain
+non-confirmed evidence; other candidates may become confirmed only when one of
+the resolver's explicit positive static proofs succeeds.
 
 A direct-name call through a function parameter is treated differently when no
 internal candidate exists. In that case the parameter is runtime-provided
@@ -312,17 +312,34 @@ callable evidence and is retained as a dynamic `callback_parameter` call. If a
 same-file or imported internal candidate exists under that name, the parameter
 continues to be recorded as shadowing that candidate instead.
 
-The resolver now positively confirms a narrow first class of call targets:
-direct-name calls backed by one resolved internal `from ... import ...`
-binding whose compiler symbol-table entry is imported and has not been
-reassigned.
+The resolver currently has two narrow positive binding proofs.
 
-Such outcomes are recorded as `RESOLVED_INTERNAL`. This is static binding proof,
-not a guarantee that a call executes at runtime.
+The first confirms a direct-name call backed by one resolved internal
+`from ... import ...` binding when compiler symbol-table evidence shows the
+binding is imported and not reassigned, parameter-bound, nonlocal, or free.
+Binding-order checks additionally prevent an import that occurs too late for an
+immediately evaluated module/class/default/decorator call or a same-scope local
+call from proving the relationship.
 
-`RESOLVED_INTERNAL` calls become `CALL` dependency edges. Same-file top-level
-name matches and other weaker candidates remain `POTENTIAL_INTERNAL` until
-stronger positive binding proof is implemented.
+The second confirms a stable same-file direct-name binding. The candidate must
+resolve uniquely to one direct top-level function, async-function, or class
+definition. That definition must be undecorated, must be the only recognized
+module binding site for the name, and must already be available when the call is
+evaluated during module initialization.
+
+The resolver also inspects the already-read Python AST to conservatively block
+positive proof when a matching call is nested beneath a lambda or comprehension
+binding that the current normalized call-scope model does not represent.
+
+The two proof kinds are retained explicitly as
+`INTERNAL_IMPORT_BINDING` and `SAME_FILE_STABLE_BINDING`.
+
+Successful proofs produce `RESOLVED_INTERNAL`. This is static binding evidence,
+not a guarantee that the call executes at runtime.
+
+`RESOLVED_INTERNAL` calls become `CALL` dependency edges. Candidates that do
+not satisfy positive proof remain potential, shadowed, ambiguous, unresolved,
+or dynamic evidence as appropriate.
 
 ## Dependency graph
 

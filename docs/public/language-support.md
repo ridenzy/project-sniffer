@@ -23,10 +23,15 @@ Phase 2F-C provides level-4 analyzer support for confirmed internal Python
 imports, conservative call-candidate resolution, compiler-assisted shadowing
 rejection, and the first positively proven internal Python call relationships.
 
-Confirmed calls currently require a unique resolved internal import binding
-that has not been reassigned according to Python compiler symbol-table evidence.
-Other potential, shadowed, ambiguous, unresolved, and dynamic calls remain
-explicitly separate.
+Confirmed calls currently use two narrow positive Python binding proofs: a
+stable resolved internal import binding or a stable same-file direct top-level
+binding. Import proof uses compiler symbol-table evidence together with binding
+order, while same-file proof additionally uses the already-read Python AST to
+verify a unique stable top-level definition and reject unsafe binding shapes.
+
+Calls affected by rebinding, unsafe binding order, lambda/comprehension
+shadowing, ambiguity, unresolved targets, or dynamic behavior remain explicitly
+separate from confirmed `CALL` relationships.
 
 Dynamic Python call evidence is additionally classified where deterministic
 syntax or compiler binding evidence permits it. Current dynamic kinds include
@@ -175,9 +180,10 @@ modules.
 
 The `--trace` analyzer currently consumes confirmed internal Python imports,
 conservative direct-name call candidates, compiler-assisted shadowing evidence,
-and positively proven internal calls. Confirmed calls currently require stable
-internal import bindings; remaining candidates continue to be rendered with
-explicit uncertainty.
+AST-assisted binding checks, and positively proven internal calls. Confirmed
+calls may currently be proven through either a stable internal import binding
+or the conservative same-file stable-binding proof; remaining candidates
+continue to be rendered with explicit uncertainty.
 
 Attribute-chain and method resolution, broader dynamic-call classification,
 additional binding proofs, routes, APIs, file operations, exports, database
