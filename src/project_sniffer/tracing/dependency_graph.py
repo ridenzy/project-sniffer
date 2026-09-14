@@ -10,10 +10,10 @@ from project_sniffer.tracing.models import (
     DependencyKind,
     ImportResolutionStatus,
 )
-from project_sniffer.tracing.python_calls import (
+from project_sniffer.tracing.python.calls import (
     resolve_python_calls,
 )
-from project_sniffer.tracing.python_imports import (
+from project_sniffer.tracing.python.imports import (
     resolve_python_imports,
 )
 

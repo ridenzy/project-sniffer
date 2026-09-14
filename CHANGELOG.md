@@ -125,6 +125,13 @@ The project is still in pre-1.0 development.
   inheritance, class keywords including metaclasses, and unresolved instance
   receivers so uncertain relationships remain outside confirmed `CALL` edges.
 
+### Changed
+
+- Grouped Python-specific trace resolution under
+  `project_sniffer.tracing.python`, moving call and import resolution to
+  `python/calls.py` and `python/imports.py` while preserving the existing
+  `project_sniffer.tracing` public facade and analysis behavior.
+
 ### Removed
 
 - Obsolete root-level scanner, architecture-builder, report-builder, utility,

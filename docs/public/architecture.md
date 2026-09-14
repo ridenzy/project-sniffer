@@ -244,9 +244,9 @@ explicit evidence rather than inferred relationships.
 
 ## Python import resolution
 
-`project_sniffer.tracing` now consumes the shared `SemanticProjectIndex` to
-resolve normalized Python import evidence against source files already present
-in the project evidence.
+`project_sniffer.tracing.python.imports` consumes the shared
+`SemanticProjectIndex` to resolve normalized Python import evidence against
+source files already present in the project evidence.
 
 Resolution does not import target modules, execute target-project code, inspect
 the target interpreter environment, install dependencies, or reopen project
@@ -269,7 +269,7 @@ own positive static proof succeeds.
 
 ## Python call candidate resolution
 
-`project_sniffer.tracing.python_calls` consumes the shared
+`project_sniffer.tracing.python.calls` consumes the shared
 `SemanticProjectIndex` together with the existing Python import resolutions.
 
 The current resolver handles direct-name calls conservatively and also supports

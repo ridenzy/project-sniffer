@@ -19,10 +19,8 @@ from project_sniffer.tracing.models import (
     ImportResolution,
     ImportResolutionStatus,
 )
-from project_sniffer.tracing.python_calls import (
+from project_sniffer.tracing.python import (
     resolve_python_calls,
-)
-from project_sniffer.tracing.python_imports import (
     resolve_python_imports,
 )
 from project_sniffer.tracing.trace_renderer import (
