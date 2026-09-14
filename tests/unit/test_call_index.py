@@ -185,6 +185,113 @@ class CallIndexTests(
             call_index.outbound[0].edges[0],
         )
 
+    def test_module_attribute_call_enters_call_index(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "import pkg.worker as worker\n"
+                    "\n"
+                    "def run():\n"
+                    "    return "
+                    "worker.module_execute()\n"
+                ),
+            ),
+            self.evidence(
+                "pkg/worker.py",
+                (
+                    "def module_execute():\n"
+                    "    return True\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(
+            graph
+        )
+
+        self.assertEqual(
+            tuple(
+                entry.endpoint
+                for entry
+                in call_index.outbound
+            ),
+            (
+                CallEndpoint(
+                    path="pkg/app.py",
+                    symbol="run",
+                ),
+            ),
+        )
+
+        self.assertEqual(
+            tuple(
+                entry.endpoint
+                for entry
+                in call_index.inbound
+            ),
+            (
+                CallEndpoint(
+                    path="pkg/worker.py",
+                    symbol="module_execute",
+                ),
+            ),
+        )
+
+
+    def test_class_attribute_call_enters_call_index(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    return "
+                    "Worker.execute(None)\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(
+            graph
+        )
+
+        self.assertEqual(
+            tuple(
+                entry.endpoint
+                for entry
+                in call_index.outbound
+            ),
+            (
+                CallEndpoint(
+                    path="pkg/app.py",
+                    symbol="run",
+                ),
+            ),
+        )
+
+        self.assertEqual(
+            tuple(
+                entry.endpoint
+                for entry
+                in call_index.inbound
+            ),
+            (
+                CallEndpoint(
+                    path="pkg/app.py",
+                    symbol="Worker.execute",
+                ),
+            ),
+        )
+
+
     def test_uncertain_calls_do_not_enter_call_index(
         self,
     ) -> None:

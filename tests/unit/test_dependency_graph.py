@@ -168,6 +168,131 @@ class DependencyGraphTests(
             graph.call_resolutions[0],
         )
 
+    def test_resolved_module_attribute_call_becomes_dependency_edge(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "import pkg.worker as worker\n"
+                    "\n"
+                    "def run():\n"
+                    "    return "
+                    "worker.module_execute()\n"
+                ),
+            ),
+            self.evidence(
+                "pkg/worker.py",
+                (
+                    "def module_execute():\n"
+                    "    return True\n"
+                ),
+            ),
+        )
+
+        call_edges = tuple(
+            edge
+            for edge in graph.edges
+            if edge.kind
+            is DependencyKind.CALL
+        )
+
+        self.assertEqual(
+            len(
+                call_edges
+            ),
+            1,
+        )
+
+        edge = call_edges[0]
+
+        self.assertEqual(
+            edge.source_path,
+            "pkg/app.py",
+        )
+
+        self.assertEqual(
+            edge.target_path,
+            "pkg/worker.py",
+        )
+
+        self.assertEqual(
+            edge.target_symbol,
+            "module_execute",
+        )
+
+        self.assertEqual(
+            edge.scope,
+            "run",
+        )
+
+        self.assertEqual(
+            edge.line,
+            4,
+        )
+
+
+    def test_same_file_class_attribute_call_becomes_dependency_edge(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    return "
+                    "Worker.execute(None)\n"
+                ),
+            ),
+        )
+
+        call_edges = tuple(
+            edge
+            for edge in graph.edges
+            if edge.kind
+            is DependencyKind.CALL
+        )
+
+        self.assertEqual(
+            len(
+                call_edges
+            ),
+            1,
+        )
+
+        edge = call_edges[0]
+
+        self.assertEqual(
+            edge.source_path,
+            "pkg/app.py",
+        )
+
+        self.assertEqual(
+            edge.target_path,
+            "pkg/app.py",
+        )
+
+        self.assertEqual(
+            edge.target_symbol,
+            "Worker.execute",
+        )
+
+        self.assertEqual(
+            edge.scope,
+            "run",
+        )
+
+        self.assertEqual(
+            edge.line,
+            6,
+        )
+
+
     def test_uncertain_imports_remain_without_edges(
         self,
     ) -> None:

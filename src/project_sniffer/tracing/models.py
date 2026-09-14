@@ -46,6 +46,18 @@ class CallResolutionProof(
         "same_file_stable_binding"
     )
 
+    INTERNAL_MODULE_ATTRIBUTE_BINDING = (
+        "internal_module_attribute_binding"
+    )
+
+    SAME_FILE_CLASS_ATTRIBUTE_BINDING = (
+        "same_file_class_attribute_binding"
+    )
+
+    INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING = (
+        "internal_imported_class_attribute_binding"
+    )
+
 class CallShadowReason(
     str,
     Enum,

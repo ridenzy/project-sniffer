@@ -111,6 +111,19 @@ The project is still in pre-1.0 development.
   internal candidate remain explicit `SHADOWED` outcomes.
 - Dependency-trace dynamic-call entries now include their preserved dynamic
   call kind without promoting uncertain calls into confirmed dependency edges.
+- Positive static proof for stable two-part internal Python module-attribute
+  calls such as `worker.module_execute()` when the receiver is one resolved
+  internal module import and the target is one stable top-level symbol,
+  producing explicit `INTERNAL_MODULE_ATTRIBUTE_BINDING` provenance.
+- Positive static proof for stable two-part Python class-attribute calls such as
+  `Worker.execute(...)` for direct same-file top-level classes and directly
+  imported internal classes, producing explicit
+  `SAME_FILE_CLASS_ATTRIBUTE_BINDING` and
+  `INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING` provenance.
+- Conservative attribute-call proof guards for caller-side direct assignment
+  and `setattr()` mutation, target rebinding, decorated or rebound methods,
+  inheritance, class keywords including metaclasses, and unresolved instance
+  receivers so uncertain relationships remain outside confirmed `CALL` edges.
 
 ### Removed
 

@@ -601,6 +601,799 @@ class PythonCallResolutionTests(
             2,
         )
 
+    def test_internal_module_attribute_binding_is_resolved_internal(
+        self,
+    ) -> None:
+        resolution = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "import pkg.worker as worker\n"
+                    "\n"
+                    "def run():\n"
+                    "    return "
+                    "worker.module_execute()\n"
+                ),
+            ),
+            self.evidence(
+                "pkg/worker.py",
+                (
+                    "def module_execute():\n"
+                    "    return True\n"
+                ),
+            ),
+        )[0]
+
+        self.assertIs(
+            resolution.status,
+            (
+                CallResolutionStatus
+                .RESOLVED_INTERNAL
+            ),
+        )
+
+        self.assertIsNotNone(
+            resolution.resolved_target
+        )
+
+        self.assertEqual(
+            (
+                resolution
+                .resolved_target
+                .source_path
+            ),
+            "pkg/worker.py",
+        )
+
+        self.assertEqual(
+            (
+                resolution
+                .resolved_target
+                .qualified_name
+            ),
+            "module_execute",
+        )
+
+        self.assertIs(
+            resolution.proof,
+            (
+                CallResolutionProof
+                .INTERNAL_MODULE_ATTRIBUTE_BINDING
+            ),
+        )
+
+        self.assertEqual(
+            len(
+                resolution
+                .candidate_targets
+            ),
+            1,
+        )
+
+    def test_unstable_module_attribute_bindings_remain_potential(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "receiver_reassigned",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "import pkg.worker "
+                            "as worker\n"
+                            "worker = replacement\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "worker.module_execute()\n"
+                        ),
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "def module_execute():\n"
+                            "    return True\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "target_reassigned",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "import pkg.worker "
+                            "as worker\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "worker.module_execute()\n"
+                        ),
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "def module_execute():\n"
+                            "    return True\n"
+                            "\n"
+                            "module_execute = "
+                            "replacement\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "local_import_after_call",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "def run():\n"
+                            "    value = "
+                            "worker.module_execute()\n"
+                            "    import pkg.worker "
+                            "as worker\n"
+                            "    return value\n"
+                        ),
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "def module_execute():\n"
+                            "    return True\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "caller_attribute_reassigned",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "import pkg.worker "
+                            "as worker\n"
+                            "worker.module_execute = "
+                            "replacement\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "worker.module_execute()\n"
+                        ),
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "def module_execute():\n"
+                            "    return True\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "caller_setattr_reassigned",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "import pkg.worker "
+                            "as worker\n"
+                            "setattr(\n"
+                            "    worker,\n"
+                            "    \"module_execute\",\n"
+                            "    replacement,\n"
+                            ")\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "worker.module_execute()\n"
+                        ),
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "def module_execute():\n"
+                            "    return True\n"
+                        ),
+                    ),
+                ),
+            )
+        )
+
+        for case_name, evidence in cases:
+            with self.subTest(
+                case=case_name
+            ):
+                resolutions = self.resolve(
+                    *evidence
+                )
+
+                resolution = next(
+                    item
+                    for item in resolutions
+                    if (
+                        len(
+                            item
+                            .evidence
+                            .target_parts
+                        ) == 2
+                        and (
+                            item
+                            .evidence
+                            .target_parts[-1]
+                            == "module_execute"
+                        )
+                    )
+                )
+
+                self.assertIs(
+                    resolution.status,
+                    (
+                        CallResolutionStatus
+                        .POTENTIAL_INTERNAL
+                    ),
+                )
+
+                self.assertIsNone(
+                    resolution.resolved_target
+                )
+
+                self.assertIsNone(
+                    resolution.proof
+                )
+
+                self.assertEqual(
+                    len(
+                        resolution
+                        .candidate_targets
+                    ),
+                    1,
+                )
+
+    def test_module_attribute_implicit_scopes_remain_unresolved(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "lambda_parameter",
+                (
+                    "import pkg.worker as worker\n"
+                    "\n"
+                    "callback = lambda worker: "
+                    "worker.module_execute()\n"
+                ),
+            ),
+            (
+                "comprehension_target",
+                (
+                    "import pkg.worker as worker\n"
+                    "\n"
+                    "values = [\n"
+                    "    worker.module_execute()\n"
+                    "    for worker in workers\n"
+                    "]\n"
+                ),
+            ),
+        )
+
+        for case_name, source in cases:
+            with self.subTest(
+                case=case_name
+            ):
+                resolution = self.resolve(
+                    self.evidence(
+                        "pkg/app.py",
+                        source,
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "def module_execute():\n"
+                            "    return True\n"
+                        ),
+                    ),
+                )[0]
+
+                self.assertIs(
+                    resolution.status,
+                    (
+                        CallResolutionStatus
+                        .UNRESOLVED
+                    ),
+                )
+
+                self.assertEqual(
+                    resolution.candidate_targets,
+                    (),
+                )
+
+
+    def test_stable_class_attribute_bindings_are_resolved_internal(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "same_file_method",
+                "pkg/app.py",
+                "Worker.execute",
+                (
+                    CallResolutionProof
+                    .SAME_FILE_CLASS_ATTRIBUTE_BINDING
+                ),
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "class Worker:\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "Worker.execute(None)\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "same_file_async_method",
+                "pkg/app.py",
+                "Worker.execute",
+                (
+                    CallResolutionProof
+                    .SAME_FILE_CLASS_ATTRIBUTE_BINDING
+                ),
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "class Worker:\n"
+                            "    async def execute(self):\n"
+                            "        return True\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "Worker.execute(None)\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "imported_class",
+                "pkg/worker.py",
+                "Worker.execute",
+                (
+                    CallResolutionProof
+                    .INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING
+                ),
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "from .worker "
+                            "import Worker\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "Worker.execute(None)\n"
+                        ),
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "class Worker:\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "imported_class_alias",
+                "pkg/worker.py",
+                "Worker.execute",
+                (
+                    CallResolutionProof
+                    .INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING
+                ),
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "from .worker "
+                            "import Worker as W\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "W.execute(None)\n"
+                        ),
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "class Worker:\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        for (
+            case_name,
+            target_path,
+            target_name,
+            expected_proof,
+            evidence,
+        ) in cases:
+            with self.subTest(
+                case=case_name
+            ):
+                resolution = self.resolve(
+                    *evidence
+                )[0]
+
+                self.assertIs(
+                    resolution.status,
+                    (
+                        CallResolutionStatus
+                        .RESOLVED_INTERNAL
+                    ),
+                )
+
+                self.assertIsNotNone(
+                    resolution.resolved_target
+                )
+
+                self.assertEqual(
+                    (
+                        resolution
+                        .resolved_target
+                        .source_path
+                    ),
+                    target_path,
+                )
+
+                self.assertEqual(
+                    (
+                        resolution
+                        .resolved_target
+                        .qualified_name
+                    ),
+                    target_name,
+                )
+
+                self.assertIs(
+                    resolution.proof,
+                    expected_proof,
+                )
+
+                self.assertEqual(
+                    len(
+                        resolution
+                        .candidate_targets
+                    ),
+                    1,
+                )
+
+
+    def test_unstable_class_attribute_bindings_remain_potential(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "decorated_method",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "class Worker:\n"
+                            "    @staticmethod\n"
+                            "    def execute():\n"
+                            "        return True\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "Worker.execute()\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "class_member_reassigned",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "class Worker:\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                            "    execute = "
+                            "replacement\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "Worker.execute(None)\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "module_attribute_reassigned",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "class Worker:\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                            "\n"
+                            "Worker.execute = "
+                            "replacement\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "Worker.execute(None)\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "setattr_reassigned",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "class Worker:\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                            "\n"
+                            "setattr(\n"
+                            "    Worker,\n"
+                            "    \"execute\",\n"
+                            "    replacement,\n"
+                            ")\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "Worker.execute(None)\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "call_before_class_definition",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "value = "
+                            "Worker.execute(None)\n"
+                            "\n"
+                            "class Worker:\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "imported_target_class_rebound",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "from .worker "
+                            "import Worker\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "Worker.execute(None)\n"
+                        ),
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "class Worker:\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                            "\n"
+                            "Worker = replacement\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "imported_caller_attribute_reassigned",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "from .worker "
+                            "import Worker\n"
+                            "Worker.execute = "
+                            "replacement\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "Worker.execute(None)\n"
+                        ),
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "class Worker:\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "imported_alias_setattr_reassigned",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "from .worker "
+                            "import Worker as W\n"
+                            "setattr(\n"
+                            "    W,\n"
+                            "    \"execute\",\n"
+                            "    replacement,\n"
+                            ")\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "W.execute(None)\n"
+                        ),
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "class Worker:\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "inherited_class",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "class Base:\n"
+                            "    pass\n"
+                            "\n"
+                            "class Worker(Base):\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "Worker.execute(None)\n"
+                        ),
+                    ),
+                ),
+            ),
+            (
+                "explicit_metaclass",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "class Meta(type):\n"
+                            "    def __getattribute__(\n"
+                            "        cls,\n"
+                            "        name,\n"
+                            "    ):\n"
+                            "        return replacement\n"
+                            "\n"
+                            "class Worker(\n"
+                            "    metaclass=Meta\n"
+                            "):\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                            "\n"
+                            "def run():\n"
+                            "    return "
+                            "Worker.execute(None)\n"
+                        ),
+                    ),
+                ),
+            ),
+        )
+
+        for case_name, evidence in cases:
+            with self.subTest(
+                case=case_name
+            ):
+                resolutions = self.resolve(
+                    *evidence
+                )
+
+                resolution = next(
+                    item
+                    for item in resolutions
+                    if (
+                        len(
+                            item
+                            .evidence
+                            .target_parts
+                        ) == 2
+                        and (
+                            item
+                            .evidence
+                            .target_parts[-1]
+                            == "execute"
+                        )
+                    )
+                )
+
+                self.assertIs(
+                    resolution.status,
+                    (
+                        CallResolutionStatus
+                        .POTENTIAL_INTERNAL
+                    ),
+                )
+
+                self.assertIsNone(
+                    resolution.resolved_target
+                )
+
+                self.assertIsNone(
+                    resolution.proof
+                )
+
+                self.assertEqual(
+                    len(
+                        resolution
+                        .candidate_targets
+                    ),
+                    1,
+                )
+
+
+    def test_class_receiver_shadowing_is_not_confirmed(
+        self,
+    ) -> None:
+        resolution = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def run(Worker):\n"
+                    "    return "
+                    "Worker.execute(None)\n"
+                ),
+            ),
+        )[0]
+
+        self.assertIs(
+            resolution.status,
+            CallResolutionStatus.SHADOWED,
+        )
+
+        self.assertIs(
+            resolution.shadowed_by,
+            CallShadowReason.PARAMETER,
+        )
+
+        self.assertEqual(
+            resolution.candidate_targets,
+            (),
+        )
+
+
     def test_attribute_call_remains_unresolved(
         self,
     ) -> None:

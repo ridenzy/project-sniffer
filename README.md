@@ -171,6 +171,22 @@ The existing implementation can:
 - render dynamic-call kinds through `--trace` without allowing those uncertain
   relationships into confirmed `CALL` dependency edges or caller/callee
   indexes.
+- positively confirm stable two-part module-attribute calls such as
+  `worker.module_execute()` when the receiver is a stable resolved internal
+  module import and the requested member is one stable top-level target;
+- positively confirm stable two-part `Class.method(...)` calls for direct
+  same-file top-level classes and directly imported internal classes when the
+  class and method bindings satisfy the conservative static proof;
+- retain `INTERNAL_MODULE_ATTRIBUTE_BINDING`,
+  `SAME_FILE_CLASS_ATTRIBUTE_BINDING`, and
+  `INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING` provenance on those confirmed
+  attribute relationships;
+- refuse positive attribute proof when recognized caller-side or target-side
+  mutation makes the binding uncertain, and keep inheritance, explicit class
+  keywords such as metaclasses, and arbitrary instance receivers outside the
+  confirmed relationship set;
+- keep unknown instance calls such as `service.execute()` unresolved rather
+  than inferring an instance type that the current static evidence cannot prove.
 
 ## Language recognition
 

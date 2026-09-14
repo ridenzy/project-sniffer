@@ -113,6 +113,58 @@ def _build_top_level_symbol_index(
     }
 
 
+def _build_qualified_symbol_index(
+    index: SemanticProjectIndex,
+) -> dict[
+    tuple[str, str],
+    tuple[CallTarget, ...],
+]:
+    targets: dict[
+        tuple[str, str],
+        list[CallTarget],
+    ] = {}
+
+    for symbol in index.symbols:
+        evidence = symbol.evidence
+
+        target = CallTarget(
+            source_path=symbol.source_path,
+            qualified_name=(
+                evidence.qualified_name
+            ),
+            kind=evidence.kind,
+            line=evidence.line,
+        )
+
+        key = (
+            symbol.source_path,
+            evidence.qualified_name,
+        )
+
+        targets.setdefault(
+            key,
+            [],
+        ).append(
+            target
+        )
+
+    return {
+        key: tuple(
+            sorted(
+                values,
+                key=lambda item: (
+                    item.source_path,
+                    item.line,
+                    item.qualified_name,
+                    item.kind.value,
+                ),
+            )
+        )
+        for key, values
+        in targets.items()
+    }
+
+
 def _binding_is_visible(
     binding_scope: str | None,
     call_scope: str | None,
@@ -144,6 +196,24 @@ def _import_bound_name(
         or evidence.imported_name
     )
 
+def _module_import_bound_name(
+    resolution: ImportResolution,
+) -> str | None:
+    evidence = resolution.evidence
+
+    if (
+        evidence.imported_name is not None
+        or evidence.module is None
+    ):
+        return None
+
+    if evidence.alias is not None:
+        return evidence.alias
+
+    if "." in evidence.module:
+        return None
+
+    return evidence.module
 
 def _ordered_unique_targets(
     targets: Sequence[CallTarget],
@@ -946,6 +1016,1275 @@ def _confirmed_same_file_target(
         ),
     )
 
+def _attribute_call_has_implicit_scope(
+    *,
+    tree: ast.Module | None,
+    target_parts: tuple[str, ...],
+    call_line: int,
+) -> bool:
+    if tree is None:
+        return False
+
+    parent_by_child = (
+        _ast_parent_map(
+            tree
+        )
+    )
+
+    for node in ast.walk(
+        tree
+    ):
+        if (
+            not isinstance(
+                node,
+                ast.Call,
+            )
+            or node.lineno != call_line
+        ):
+            continue
+
+        parts: list[str] = []
+        current: ast.AST = node.func
+
+        while isinstance(
+            current,
+            ast.Attribute,
+        ):
+            parts.append(
+                current.attr
+            )
+            current = current.value
+
+        if not isinstance(
+            current,
+            ast.Name,
+        ):
+            continue
+
+        parts.append(
+            current.id
+        )
+
+        if tuple(
+            reversed(
+                parts
+            )
+        ) != target_parts:
+            continue
+
+        parent = parent_by_child.get(
+            node
+        )
+
+        while parent is not None:
+            if isinstance(
+                parent,
+                (
+                    ast.Lambda,
+                    ast.ListComp,
+                    ast.SetComp,
+                    ast.DictComp,
+                    ast.GeneratorExp,
+                ),
+            ):
+                return True
+
+            parent = parent_by_child.get(
+                parent
+            )
+
+    return False
+
+def _attribute_call_executes_during_module_initialization(
+    *,
+    tree: ast.Module | None,
+    target_parts: tuple[str, ...],
+    call_line: int,
+) -> bool:
+    if tree is None:
+        return False
+
+    parent_by_child = (
+        _ast_parent_map(
+            tree
+        )
+    )
+
+    for node in ast.walk(
+        tree
+    ):
+        if (
+            not isinstance(
+                node,
+                ast.Call,
+            )
+            or node.lineno != call_line
+        ):
+            continue
+
+        parts: list[str] = []
+        current: ast.AST = node.func
+
+        while isinstance(
+            current,
+            ast.Attribute,
+        ):
+            parts.append(
+                current.attr
+            )
+            current = current.value
+
+        if not isinstance(
+            current,
+            ast.Name,
+        ):
+            continue
+
+        parts.append(
+            current.id
+        )
+
+        if tuple(
+            reversed(
+                parts
+            )
+        ) != target_parts:
+            continue
+
+        child: ast.AST = node
+        parent = parent_by_child.get(
+            node
+        )
+        deferred = False
+
+        while parent is not None:
+            if isinstance(
+                parent,
+                (
+                    ast.FunctionDef,
+                    ast.AsyncFunctionDef,
+                ),
+            ):
+                if any(
+                    child is statement
+                    for statement in parent.body
+                ):
+                    deferred = True
+                    break
+
+            if (
+                isinstance(
+                    parent,
+                    ast.Lambda,
+                )
+                and child is parent.body
+            ):
+                deferred = True
+                break
+
+            child = parent
+            parent = parent_by_child.get(
+                parent
+            )
+
+        if not deferred:
+            return True
+
+    return False
+
+def _find_direct_class_definition(
+    *,
+    tree: ast.Module | None,
+    target: CallTarget,
+) -> ast.ClassDef | None:
+    if (
+        tree is None
+        or target.kind is not SymbolKind.CLASS
+    ):
+        return None
+
+    for node in tree.body:
+        if (
+            isinstance(
+                node,
+                ast.ClassDef,
+            )
+            and _definition_matches_target(
+                node,
+                target,
+            )
+        ):
+            return node
+
+    return None
+
+def _executes_in_class_scope(
+    node: ast.AST,
+    *,
+    class_node: ast.ClassDef,
+    parent_by_child: dict[
+        ast.AST,
+        ast.AST,
+    ],
+) -> bool:
+    if node is class_node:
+        return False
+
+    parent = parent_by_child.get(
+        node
+    )
+
+    while parent is not None:
+        if parent is class_node:
+            return True
+
+        if isinstance(
+            parent,
+            (
+                ast.FunctionDef,
+                ast.AsyncFunctionDef,
+                ast.Lambda,
+                ast.ClassDef,
+            ),
+        ):
+            return False
+
+        parent = parent_by_child.get(
+            parent
+        )
+
+    return False
+
+def _class_binding_sites(
+    *,
+    tree: ast.Module,
+    class_node: ast.ClassDef,
+    name: str,
+) -> tuple[
+    tuple[str, int],
+    ...,
+]:
+    parent_by_child = (
+        _ast_parent_map(
+            tree
+        )
+    )
+
+    sites: list[
+        tuple[str, int]
+    ] = []
+
+    for node in ast.walk(
+        class_node
+    ):
+        if not _executes_in_class_scope(
+            node,
+            class_node=class_node,
+            parent_by_child=parent_by_child,
+        ):
+            continue
+
+        if isinstance(
+            node,
+            (
+                ast.FunctionDef,
+                ast.AsyncFunctionDef,
+                ast.ClassDef,
+            ),
+        ):
+            if node.name == name:
+                sites.append(
+                    (
+                        "definition",
+                        node.lineno,
+                    )
+                )
+
+            continue
+
+        if isinstance(
+            node,
+            ast.Import,
+        ):
+            for alias in node.names:
+                bound_name = (
+                    alias.asname
+                    or alias.name.split(
+                        "."
+                    )[0]
+                )
+
+                if bound_name == name:
+                    sites.append(
+                        (
+                            "import",
+                            node.lineno,
+                        )
+                    )
+
+            continue
+
+        if isinstance(
+            node,
+            ast.ImportFrom,
+        ):
+            for alias in node.names:
+                if alias.name == "*":
+                    sites.append(
+                        (
+                            "star_import",
+                            node.lineno,
+                        )
+                    )
+
+                    continue
+
+                bound_name = (
+                    alias.asname
+                    or alias.name
+                )
+
+                if bound_name == name:
+                    sites.append(
+                        (
+                            "import",
+                            node.lineno,
+                        )
+                    )
+
+            continue
+
+        if (
+            isinstance(
+                node,
+                ast.Name,
+            )
+            and node.id == name
+            and isinstance(
+                node.ctx,
+                (
+                    ast.Store,
+                    ast.Del,
+                ),
+            )
+        ):
+            sites.append(
+                (
+                    "name_binding",
+                    node.lineno,
+                )
+            )
+
+            continue
+
+        if (
+            isinstance(
+                node,
+                ast.ExceptHandler,
+            )
+            and node.name == name
+        ):
+            sites.append(
+                (
+                    "exception_binding",
+                    node.lineno,
+                )
+            )
+
+            continue
+
+        if (
+            isinstance(
+                node,
+                ast.MatchAs,
+            )
+            and node.name == name
+        ):
+            sites.append(
+                (
+                    "match_binding",
+                    node.lineno,
+                )
+            )
+
+            continue
+
+        if (
+            isinstance(
+                node,
+                ast.MatchStar,
+            )
+            and node.name == name
+        ):
+            sites.append(
+                (
+                    "match_binding",
+                    node.lineno,
+                )
+            )
+
+            continue
+
+        if (
+            isinstance(
+                node,
+                ast.MatchMapping,
+            )
+            and node.rest == name
+        ):
+            sites.append(
+                (
+                    "match_binding",
+                    node.lineno,
+                )
+            )
+
+    return tuple(
+        sites
+    )
+
+def _named_receiver_attribute_mutation_exists(
+    *,
+    tree: ast.Module | None,
+    receiver_name: str,
+    member_name: str,
+) -> bool:
+    if tree is None:
+        return True
+
+    for node in ast.walk(
+        tree
+    ):
+        if (
+            isinstance(
+                node,
+                ast.Attribute,
+            )
+            and node.attr == member_name
+            and isinstance(
+                node.value,
+                ast.Name,
+            )
+            and node.value.id == receiver_name
+            and isinstance(
+                node.ctx,
+                (
+                    ast.Store,
+                    ast.Del,
+                ),
+            )
+        ):
+            return True
+
+        if (
+            isinstance(
+                node,
+                ast.Call,
+            )
+            and isinstance(
+                node.func,
+                ast.Name,
+            )
+            and node.func.id
+            in {
+                "setattr",
+                "delattr",
+            }
+            and len(
+                node.args
+            ) >= 2
+            and isinstance(
+                node.args[0],
+                ast.Name,
+            )
+            and node.args[0].id
+            == receiver_name
+            and isinstance(
+                node.args[1],
+                ast.Constant,
+            )
+            and node.args[1].value
+            == member_name
+        ):
+            return True
+
+    return False
+
+
+def _confirmed_class_member_target(
+    *,
+    tree: ast.Module | None,
+    class_target: CallTarget,
+    member_target: CallTarget,
+) -> CallTarget | None:
+    if tree is None:
+        return None
+
+    class_node = (
+        _find_direct_class_definition(
+            tree=tree,
+            target=class_target,
+        )
+    )
+
+    if class_node is None:
+        return None
+
+    if (
+        class_node.bases
+        or class_node.keywords
+    ):
+        return None
+
+    member_name = (
+        member_target
+        .qualified_name
+        .rsplit(
+            ".",
+            1,
+        )[-1]
+    )
+
+    expected_qualified_name = (
+        f"{class_target.qualified_name}"
+        f".{member_name}"
+    )
+
+    if (
+        member_target.qualified_name
+        != expected_qualified_name
+        or member_target.kind
+        not in {
+            SymbolKind.FUNCTION,
+            SymbolKind.ASYNC_FUNCTION,
+        }
+    ):
+        return None
+
+    definition = next(
+        (
+            node
+            for node in class_node.body
+            if (
+                isinstance(
+                    node,
+                    (
+                        ast.FunctionDef,
+                        ast.AsyncFunctionDef,
+                    ),
+                )
+                and node.name
+                == member_name
+                and node.lineno
+                == member_target.line
+            )
+        ),
+        None,
+    )
+
+    if (
+        definition is None
+        or definition.decorator_list
+    ):
+        return None
+
+    binding_sites = (
+        _class_binding_sites(
+            tree=tree,
+            class_node=class_node,
+            name=member_name,
+        )
+    )
+
+    if binding_sites != (
+        (
+            "definition",
+            member_target.line,
+        ),
+    ):
+        return None
+
+    if _named_receiver_attribute_mutation_exists(
+        tree=tree,
+        receiver_name=(
+            class_target.qualified_name
+        ),
+        member_name=member_name,
+    ):
+        return None
+
+    return member_target
+
+
+def _confirmed_module_attribute_target(
+    *,
+    root: symtable.SymbolTable | None,
+    syntax_trees: dict[
+        str,
+        ast.Module,
+    ],
+    call_scope: str | None,
+    call_line: int,
+    receiver_name: str,
+    candidates: tuple[
+        CallTarget,
+        ...,
+    ],
+    bindings: Sequence[
+        tuple[
+            ImportResolution,
+            CallTarget,
+        ]
+    ],
+) -> tuple[
+    CallTarget | None,
+    CallResolutionProof | None,
+]:
+    if len(candidates) != 1:
+        return None, None
+
+    target = candidates[0]
+
+    matching_bindings = tuple(
+        item
+        for item in bindings
+        if item[1] == target
+    )
+
+    if len(matching_bindings) != 1:
+        return None, None
+
+    resolution, _ = matching_bindings[0]
+    binding_scope = resolution.evidence.scope
+
+    if (
+        binding_scope == call_scope
+        and resolution.evidence.line
+        >= call_line
+    ):
+        return None, None
+
+    symbol = _binding_symbol(
+        root,
+        binding_scope,
+        receiver_name,
+    )
+
+    if (
+        symbol is None
+        or not symbol.is_imported()
+        or symbol.is_assigned()
+        or symbol.is_parameter()
+        or symbol.is_nonlocal()
+        or symbol.is_free()
+    ):
+        return None, None
+
+    stable_target, _ = (
+        _confirmed_same_file_target(
+            tree=syntax_trees.get(
+                target.source_path
+            ),
+            target_name=(
+                target.qualified_name
+            ),
+            call_line=0,
+            call_executes_during_module_initialization=False,
+            ordered_candidates=(target,),
+            same_file_candidates=(target,),
+        )
+    )
+
+    if stable_target is None:
+        return None, None
+
+    return (
+        target,
+        (
+            CallResolutionProof
+            .INTERNAL_MODULE_ATTRIBUTE_BINDING
+        ),
+    )
+
+def _resolve_module_attribute_call(
+    *,
+    source_path: str,
+    evidence,
+    symbols: dict[
+        tuple[str, str],
+        tuple[CallTarget, ...],
+    ],
+    import_resolutions: Sequence[
+        ImportResolution
+    ],
+    symbol_tables: dict[
+        str,
+        symtable.SymbolTable,
+    ],
+    syntax_trees: dict[
+        str,
+        ast.Module,
+    ],
+) -> CallResolution | None:
+    if (
+        len(evidence.target_parts) != 2
+        or _attribute_call_has_implicit_scope(
+            tree=syntax_trees.get(
+                source_path
+            ),
+            target_parts=(
+                evidence.target_parts
+            ),
+            call_line=evidence.line,
+        )
+    ):
+        return None
+
+    receiver_name, member_name = (
+        evidence.target_parts
+    )
+
+    candidates: list[
+        CallTarget
+    ] = []
+
+    bindings: list[
+        tuple[
+            ImportResolution,
+            CallTarget,
+        ]
+    ] = []
+
+    for resolution in import_resolutions:
+        if (
+            resolution.source_path
+            != source_path
+            or resolution.status
+            is not (
+                ImportResolutionStatus
+                .RESOLVED_INTERNAL
+            )
+            or resolution.target_path
+            is None
+            or not _binding_is_visible(
+                resolution.evidence.scope,
+                evidence.scope,
+            )
+            or _module_import_bound_name(
+                resolution
+            )
+            != receiver_name
+        ):
+            continue
+
+        matching_targets = (
+            symbols.get(
+                (
+                    resolution.target_path,
+                    member_name,
+                ),
+                (),
+            )
+        )
+
+        candidates.extend(
+            matching_targets
+        )
+
+        bindings.extend(
+            (
+                resolution,
+                target,
+            )
+            for target
+            in matching_targets
+        )
+
+    ordered_candidates = (
+        _ordered_unique_targets(
+            candidates
+        )
+    )
+
+    if not ordered_candidates:
+        return None
+
+    scope_symbol = _scope_symbol(
+        symbol_tables.get(
+            source_path
+        ),
+        evidence.scope,
+        receiver_name,
+    )
+
+    shadowed_by = _shadow_reason(
+        scope_symbol,
+        has_internal_import_candidate=True,
+    )
+
+    if shadowed_by is not None:
+        return CallResolution(
+            source_path=source_path,
+            evidence=evidence,
+            status=(
+                CallResolutionStatus
+                .SHADOWED
+            ),
+            shadowed_by=shadowed_by,
+        )
+
+    caller_attribute_mutated = (
+        _named_receiver_attribute_mutation_exists(
+            tree=syntax_trees.get(
+                source_path
+            ),
+            receiver_name=receiver_name,
+            member_name=member_name,
+        )
+    )
+
+    if caller_attribute_mutated:
+        resolved_target = None
+        proof = None
+    else:
+        resolved_target, proof = (
+            _confirmed_module_attribute_target(
+                root=symbol_tables.get(
+                    source_path
+                ),
+                syntax_trees=syntax_trees,
+                call_scope=evidence.scope,
+                call_line=evidence.line,
+                receiver_name=receiver_name,
+                candidates=ordered_candidates,
+                bindings=bindings,
+            )
+        )
+
+    if resolved_target is not None:
+        status = (
+            CallResolutionStatus
+            .RESOLVED_INTERNAL
+        )
+
+    elif len(ordered_candidates) == 1:
+        status = (
+            CallResolutionStatus
+            .POTENTIAL_INTERNAL
+        )
+
+    else:
+        status = (
+            CallResolutionStatus
+            .AMBIGUOUS
+        )
+
+    return CallResolution(
+        source_path=source_path,
+        evidence=evidence,
+        status=status,
+        candidate_targets=(
+            ordered_candidates
+        ),
+        resolved_target=resolved_target,
+        proof=proof,
+    )
+
+def _resolve_class_attribute_call(
+    *,
+    source_path: str,
+    evidence,
+    top_level_symbols: dict[
+        tuple[str, str],
+        tuple[CallTarget, ...],
+    ],
+    qualified_symbols: dict[
+        tuple[str, str],
+        tuple[CallTarget, ...],
+    ],
+    import_resolutions: Sequence[
+        ImportResolution
+    ],
+    symbol_tables: dict[
+        str,
+        symtable.SymbolTable,
+    ],
+    syntax_trees: dict[
+        str,
+        ast.Module,
+    ],
+) -> CallResolution | None:
+    if (
+        len(evidence.target_parts) != 2
+        or _attribute_call_has_implicit_scope(
+            tree=syntax_trees.get(
+                source_path
+            ),
+            target_parts=(
+                evidence.target_parts
+            ),
+            call_line=evidence.line,
+        )
+    ):
+        return None
+
+    receiver_name, member_name = (
+        evidence.target_parts
+    )
+
+    same_file_classes = tuple(
+        target
+        for target in top_level_symbols.get(
+            (
+                source_path,
+                receiver_name,
+            ),
+            (),
+        )
+        if target.kind is SymbolKind.CLASS
+    )
+
+    imported_classes: list[
+        CallTarget
+    ] = []
+
+    imported_bindings: list[
+        tuple[
+            ImportResolution,
+            CallTarget,
+        ]
+    ] = []
+
+    for resolution in import_resolutions:
+        if (
+            resolution.source_path
+            != source_path
+            or resolution.status
+            is not (
+                ImportResolutionStatus
+                .RESOLVED_INTERNAL
+            )
+            or resolution.target_path
+            is None
+            or not _binding_is_visible(
+                resolution.evidence.scope,
+                evidence.scope,
+            )
+            or _import_bound_name(
+                resolution
+            )
+            != receiver_name
+            or resolution.evidence.imported_name
+            is None
+        ):
+            continue
+
+        matching_classes = tuple(
+            target
+            for target in top_level_symbols.get(
+                (
+                    resolution.target_path,
+                    (
+                        resolution
+                        .evidence
+                        .imported_name
+                    ),
+                ),
+                (),
+            )
+            if target.kind
+            is SymbolKind.CLASS
+        )
+
+        imported_classes.extend(
+            matching_classes
+        )
+
+        imported_bindings.extend(
+            (
+                resolution,
+                target,
+            )
+            for target
+            in matching_classes
+        )
+
+    scope_symbol = _scope_symbol(
+        symbol_tables.get(
+            source_path
+        ),
+        evidence.scope,
+        receiver_name,
+    )
+
+    if (
+        scope_symbol is not None
+        and scope_symbol.is_imported()
+        and imported_classes
+    ):
+        class_candidates = (
+            imported_classes
+        )
+    else:
+        class_candidates = [
+            *same_file_classes,
+            *imported_classes,
+        ]
+
+    ordered_class_candidates = (
+        _ordered_unique_targets(
+            class_candidates
+        )
+    )
+
+    if not ordered_class_candidates:
+        return None
+
+    shadowed_by = _shadow_reason(
+        scope_symbol,
+        has_internal_import_candidate=bool(
+            imported_classes
+        ),
+    )
+
+    if shadowed_by is not None:
+        return CallResolution(
+            source_path=source_path,
+            evidence=evidence,
+            status=(
+                CallResolutionStatus
+                .SHADOWED
+            ),
+            shadowed_by=shadowed_by,
+        )
+
+    call_executes_immediately = (
+        _attribute_call_executes_during_module_initialization(
+            tree=syntax_trees.get(
+                source_path
+            ),
+            target_parts=(
+                evidence.target_parts
+            ),
+            call_line=evidence.line,
+        )
+    )
+
+    class_target, class_proof = (
+        _confirmed_import_target(
+            root=symbol_tables.get(
+                source_path
+            ),
+            target_name=receiver_name,
+            call_scope=evidence.scope,
+            call_line=evidence.line,
+            call_executes_during_module_initialization=(
+                call_executes_immediately
+            ),
+            ordered_candidates=(
+                ordered_class_candidates
+            ),
+            imported_bindings=(
+                imported_bindings
+            ),
+        )
+    )
+
+    if class_target is None:
+        class_target, class_proof = (
+            _confirmed_same_file_target(
+                tree=syntax_trees.get(
+                    source_path
+                ),
+                target_name=receiver_name,
+                call_line=evidence.line,
+                call_executes_during_module_initialization=(
+                    call_executes_immediately
+                ),
+                ordered_candidates=(
+                    ordered_class_candidates
+                ),
+                same_file_candidates=(
+                    same_file_classes
+                ),
+            )
+        )
+
+    if (
+        class_target is not None
+        and class_proof
+        is (
+            CallResolutionProof
+            .SAME_FILE_STABLE_BINDING
+        )
+        and call_executes_immediately
+        and evidence.scope is not None
+        and (
+            evidence.scope
+            == class_target.qualified_name
+            or evidence.scope.startswith(
+                f"{class_target.qualified_name}."
+            )
+        )
+    ):
+        class_target = None
+        class_proof = None
+
+    member_candidates: list[
+        CallTarget
+    ] = []
+
+    for candidate_class in (
+        ordered_class_candidates
+    ):
+        member_candidates.extend(
+            qualified_symbols.get(
+                (
+                    candidate_class.source_path,
+                    (
+                        f"{candidate_class.qualified_name}"
+                        f".{member_name}"
+                    ),
+                ),
+                (),
+            )
+        )
+
+    ordered_member_candidates = (
+        _ordered_unique_targets(
+            member_candidates
+        )
+    )
+
+    if not ordered_member_candidates:
+        return None
+
+    caller_attribute_mutated = (
+        _named_receiver_attribute_mutation_exists(
+            tree=syntax_trees.get(
+                source_path
+            ),
+            receiver_name=receiver_name,
+            member_name=member_name,
+        )
+    )
+
+    resolved_target = None
+    proof = None
+
+    if (
+        class_target is not None
+        and not caller_attribute_mutated
+        and len(
+            ordered_member_candidates
+        ) == 1
+    ):
+        target_tree = syntax_trees.get(
+            class_target.source_path
+        )
+
+        stable_class_target, _ = (
+            _confirmed_same_file_target(
+                tree=target_tree,
+                target_name=(
+                    class_target
+                    .qualified_name
+                ),
+                call_line=0,
+                call_executes_during_module_initialization=False,
+                ordered_candidates=(
+                    class_target,
+                ),
+                same_file_candidates=(
+                    class_target,
+                ),
+            )
+        )
+
+        member_target = (
+            ordered_member_candidates[0]
+        )
+
+        if (
+            stable_class_target
+            is not None
+            and member_target.source_path
+            == class_target.source_path
+            and member_target.qualified_name
+            == (
+                f"{class_target.qualified_name}"
+                f".{member_name}"
+            )
+            and _confirmed_class_member_target(
+                tree=target_tree,
+                class_target=class_target,
+                member_target=member_target,
+            )
+            is not None
+        ):
+            resolved_target = (
+                member_target
+            )
+
+            if (
+                class_proof
+                is (
+                    CallResolutionProof
+                    .SAME_FILE_STABLE_BINDING
+                )
+            ):
+                proof = (
+                    CallResolutionProof
+                    .SAME_FILE_CLASS_ATTRIBUTE_BINDING
+                )
+
+            elif (
+                class_proof
+                is (
+                    CallResolutionProof
+                    .INTERNAL_IMPORT_BINDING
+                )
+            ):
+                proof = (
+                    CallResolutionProof
+                    .INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING
+                )
+
+    if (
+        resolved_target is not None
+        and proof is not None
+    ):
+        status = (
+            CallResolutionStatus
+            .RESOLVED_INTERNAL
+        )
+
+    elif len(
+        ordered_member_candidates
+    ) == 1:
+        status = (
+            CallResolutionStatus
+            .POTENTIAL_INTERNAL
+        )
+
+    else:
+        status = (
+            CallResolutionStatus
+            .AMBIGUOUS
+        )
+
+    return CallResolution(
+        source_path=source_path,
+        evidence=evidence,
+        status=status,
+        candidate_targets=(
+            ordered_member_candidates
+        ),
+        resolved_target=resolved_target,
+        proof=proof,
+    )
+
+
 def _symbol_tables_by_path(
     index: SemanticProjectIndex,
 ) -> dict[
@@ -1141,6 +2480,12 @@ def resolve_python_calls(
         )
     )
 
+    qualified_symbols = (
+        _build_qualified_symbol_index(
+            index
+        )
+    )
+
     symbol_tables = (
         _symbol_tables_by_path(
             index
@@ -1194,6 +2539,66 @@ def resolve_python_calls(
             )
 
             continue
+
+        if (
+            evidence.target_kind
+            is CallTargetKind.ATTRIBUTE
+        ):
+            attribute_resolution = (
+                _resolve_module_attribute_call(
+                    source_path=source_path,
+                    evidence=evidence,
+                    symbols=symbols,
+                    import_resolutions=(
+                        import_resolutions
+                    ),
+                    symbol_tables=(
+                        symbol_tables
+                    ),
+                    syntax_trees=(
+                        syntax_trees
+                    ),
+                )
+            )
+
+            if attribute_resolution is not None:
+                resolutions.append(
+                    attribute_resolution
+                )
+
+                continue
+
+            class_attribute_resolution = (
+                _resolve_class_attribute_call(
+                    source_path=source_path,
+                    evidence=evidence,
+                    top_level_symbols=(
+                        symbols
+                    ),
+                    qualified_symbols=(
+                        qualified_symbols
+                    ),
+                    import_resolutions=(
+                        import_resolutions
+                    ),
+                    symbol_tables=(
+                        symbol_tables
+                    ),
+                    syntax_trees=(
+                        syntax_trees
+                    ),
+                )
+            )
+
+            if (
+                class_attribute_resolution
+                is not None
+            ):
+                resolutions.append(
+                    class_attribute_resolution
+                )
+
+                continue
 
         if (
             evidence.target_kind

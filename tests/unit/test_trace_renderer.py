@@ -172,6 +172,112 @@ class TraceRendererTests(
             rendered,
         )
 
+    def test_renderer_shows_confirmed_module_attribute_call(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "import pkg.worker "
+                        "as worker\n"
+                        "\n"
+                        "def run():\n"
+                        "    return "
+                        "worker.module_execute()\n"
+                    ),
+                ),
+                self.evidence(
+                    "pkg/worker.py",
+                    (
+                        "def module_execute():\n"
+                        "    return True\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::run` "
+                "→ "
+                "`pkg/worker.py::module_execute`"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/worker.py::module_execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::run` "
+                "(line 4)"
+            ),
+            rendered,
+        )
+
+
+    def test_renderer_shows_confirmed_imported_class_attribute_call(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "from .worker "
+                        "import Worker\n"
+                        "\n"
+                        "def run():\n"
+                        "    return "
+                        "Worker.execute(None)\n"
+                    ),
+                ),
+                self.evidence(
+                    "pkg/worker.py",
+                    (
+                        "class Worker:\n"
+                        "    def execute(self):\n"
+                        "        return True\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::run` "
+                "→ "
+                "`pkg/worker.py::Worker.execute`"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/worker.py::Worker.execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::run` "
+                "(line 4)"
+            ),
+            rendered,
+        )
+
     def test_renderer_labels_dynamic_call_kinds(
         self,
     ) -> None:

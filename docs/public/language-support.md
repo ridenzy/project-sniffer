@@ -23,15 +23,25 @@ Phase 2F-C provides level-4 analyzer support for confirmed internal Python
 imports, conservative call-candidate resolution, compiler-assisted shadowing
 rejection, and the first positively proven internal Python call relationships.
 
-Confirmed calls currently use two narrow positive Python binding proofs: a
-stable resolved internal import binding or a stable same-file direct top-level
-binding. Import proof uses compiler symbol-table evidence together with binding
-order, while same-file proof additionally uses the already-read Python AST to
-verify a unique stable top-level definition and reject unsafe binding shapes.
+Confirmed calls currently use five narrow Python proof kinds.
 
-Calls affected by rebinding, unsafe binding order, lambda/comprehension
-shadowing, ambiguity, unresolved targets, or dynamic behavior remain explicitly
-separate from confirmed `CALL` relationships.
+Two proofs cover direct-name calls: a stable resolved internal import binding
+and a stable same-file direct top-level binding. Import proof uses compiler
+symbol-table evidence together with binding order, while same-file proof also
+uses the already-read Python AST to verify a unique stable top-level
+definition.
+
+Three additional C5I proofs cover a conservative subset of two-part attribute
+calls: stable imported-module members, stable same-file class methods, and
+stable methods on directly imported internal classes. These relationships
+retain `INTERNAL_MODULE_ATTRIBUTE_BINDING`,
+`SAME_FILE_CLASS_ATTRIBUTE_BINDING`, or
+`INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING` provenance.
+
+Attribute calls affected by caller or target mutation, decorated or rebound
+methods, inheritance, class keywords such as metaclasses, unresolved instance
+receivers, ambiguity, or other insufficient static evidence remain separate
+from confirmed `CALL` relationships.
 
 Dynamic Python call evidence is additionally classified where deterministic
 syntax or compiler binding evidence permits it. Current dynamic kinds include

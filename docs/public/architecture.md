@@ -272,15 +272,21 @@ own positive static proof succeeds.
 `project_sniffer.tracing.python_calls` consumes the shared
 `SemanticProjectIndex` together with the existing Python import resolutions.
 
-The current resolver handles direct-name calls conservatively. It can identify
-candidate same-file top-level symbols and candidate symbols reached through an
-already-resolved internal `from ... import ...` binding, including imported
-aliases.
+The current resolver handles direct-name calls conservatively and also supports
+a narrow two-part attribute-call subset. Direct-name candidates can come from
+same-file top-level symbols or already-resolved internal
+`from ... import ...` bindings, including imported aliases.
 
-Call resolution currently distinguishes potential internal, unresolved,
-ambiguous, shadowed, resolved-internal, and dynamic outcomes. Attribute-chain
-calls remain unresolved unless stronger type or binding evidence becomes
-available.
+For a two-part `receiver.member()` call, C5I can additionally reason about two
+receiver families: a stable resolved internal module import, or an explicit
+stable class symbol backed by either a same-file top-level class or a directly
+imported internal class.
+
+Call resolution still distinguishes potential internal, unresolved, ambiguous,
+shadowed, resolved-internal, and dynamic outcomes. Arbitrary instance receivers
+such as `service.execute()` and attribute chains outside the narrow proven
+receiver forms remain unresolved unless stronger binding or type evidence
+becomes available.
 
 Dynamically computed targets remain explicitly uncertain, but the current
 Python evidence model now preserves several syntax- and binding-derived dynamic
@@ -312,27 +318,42 @@ callable evidence and is retained as a dynamic `callback_parameter` call. If a
 same-file or imported internal candidate exists under that name, the parameter
 continues to be recorded as shadowing that candidate instead.
 
-The resolver currently has two narrow positive binding proofs.
+The resolver currently has five narrow positive proof kinds.
 
-The first confirms a direct-name call backed by one resolved internal
-`from ... import ...` binding when compiler symbol-table evidence shows the
-binding is imported and not reassigned, parameter-bound, nonlocal, or free.
-Binding-order checks additionally prevent an import that occurs too late for an
-immediately evaluated module/class/default/decorator call or a same-scope local
-call from proving the relationship.
+The first two cover direct-name calls.
 
-The second confirms a stable same-file direct-name binding. The candidate must
-resolve uniquely to one direct top-level function, async-function, or class
-definition. That definition must be undecorated, must be the only recognized
-module binding site for the name, and must already be available when the call is
-evaluated during module initialization.
+`INTERNAL_IMPORT_BINDING` confirms a direct-name call backed by one resolved
+internal `from ... import ...` binding when compiler symbol-table evidence shows
+the binding is imported and not reassigned, parameter-bound, nonlocal, or free.
+Binding-order checks prevent an import that occurs too late for the relevant
+call site from proving the relationship.
 
-The resolver also inspects the already-read Python AST to conservatively block
-positive proof when a matching call is nested beneath a lambda or comprehension
-binding that the current normalized call-scope model does not represent.
+`SAME_FILE_STABLE_BINDING` confirms a stable same-file direct-name binding. The
+candidate must resolve uniquely to one direct top-level function,
+async-function, or class definition whose recognized module binding remains
+stable.
 
-The two proof kinds are retained explicitly as
-`INTERNAL_IMPORT_BINDING` and `SAME_FILE_STABLE_BINDING`.
+C5I adds three attribute-call proofs.
+
+`INTERNAL_MODULE_ATTRIBUTE_BINDING` confirms a two-part call such as
+`worker.module_execute()` when `worker` is one stable resolved internal module
+import and `module_execute` is one stable top-level target in that module.
+
+`SAME_FILE_CLASS_ATTRIBUTE_BINDING` confirms a two-part
+`Class.method(...)` call when the class is one stable direct same-file
+top-level class and the requested member is one stable direct undecorated
+method.
+
+`INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING` applies the same method proof to a
+class reached through one stable direct internal import.
+
+The class-attribute proof deliberately rejects classes with inheritance or
+class keywords such as an explicit metaclass. Decorated or rebound methods,
+caller-side direct attribute assignment, recognized `setattr()` mutation, and
+other unstable binding shapes also prevent positive proof.
+
+The resolver uses the already-read Python AST and compiler symbol tables for
+these checks; it does not execute target code or reopen source files.
 
 Successful proofs produce `RESOLVED_INTERNAL`. This is static binding evidence,
 not a guarantee that the call executes at runtime.
