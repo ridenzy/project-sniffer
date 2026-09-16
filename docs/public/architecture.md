@@ -278,9 +278,16 @@ same-file top-level symbols or already-resolved internal
 `from ... import ...` bindings, including imported aliases.
 
 For a two-part `receiver.member()` call, C5I can additionally reason about two
-receiver families: a stable resolved internal module import, or an explicit
+explicit receiver families: a stable resolved internal module import, or a
 stable class symbol backed by either a same-file top-level class or a directly
 imported internal class.
+
+C5J-A1 adds one deliberately narrow local-instance receiver family. Inside a
+direct top-level function, an immediately preceding direct assignment such as
+`worker = Worker()` may establish the receiver type for a following direct
+`worker.execute()` call when `Worker()` is a zero-argument constructor call
+already positively resolved to one stable internal class. The requested member
+must then satisfy the existing stable class-member proof.
 
 Call resolution still distinguishes potential internal, unresolved, ambiguous,
 shadowed, resolved-internal, and dynamic outcomes. Arbitrary instance receivers
@@ -318,7 +325,7 @@ callable evidence and is retained as a dynamic `callback_parameter` call. If a
 same-file or imported internal candidate exists under that name, the parameter
 continues to be recorded as shadowing that candidate instead.
 
-The resolver currently has five narrow positive proof kinds.
+The resolver currently has six narrow positive proof kinds.
 
 The first two cover direct-name calls.
 
@@ -351,6 +358,22 @@ The class-attribute proof deliberately rejects classes with inheritance or
 class keywords such as an explicit metaclass. Decorated or rebound methods,
 caller-side direct attribute assignment, recognized `setattr()` mutation, and
 other unstable binding shapes also prevent positive proof.
+
+C5J-A1 adds one local constructor-instance proof.
+
+`LOCAL_INSTANCE_CONSTRUCTOR_BINDING` confirms a narrow two-part instance method
+call such as `worker.execute()` when a direct top-level function contains an
+immediately preceding direct assignment `worker = Worker()`, the constructor
+has no arguments or keywords, and that constructor call has already been
+positively resolved to one internal class. The class and requested method must
+also satisfy the existing stable class/member checks.
+
+The local-instance proof deliberately does not perform general type inference.
+Factory results, constructor arguments, receiver parameters, intervening
+statements, nested-expression method calls, inheritance, class keywords,
+explicit `__new__`, `__init__`, or `__getattribute__` bindings, and recognized
+receiver-member mutation prevent this proof from confirming the relationship.
+Unknown receivers such as `service.execute()` therefore remain unresolved.
 
 The resolver uses the already-read Python AST and compiler symbol tables for
 these checks; it does not execute target code or reopen source files.

@@ -23,7 +23,7 @@ Phase 2F-C provides level-4 analyzer support for confirmed internal Python
 imports, conservative call-candidate resolution, compiler-assisted shadowing
 rejection, and the first positively proven internal Python call relationships.
 
-Confirmed calls currently use five narrow Python proof kinds.
+Confirmed calls currently use six narrow Python proof kinds.
 
 Two proofs cover direct-name calls: a stable resolved internal import binding
 and a stable same-file direct top-level binding. Import proof uses compiler
@@ -38,10 +38,22 @@ retain `INTERNAL_MODULE_ATTRIBUTE_BINDING`,
 `SAME_FILE_CLASS_ATTRIBUTE_BINDING`, or
 `INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING` provenance.
 
-Attribute calls affected by caller or target mutation, decorated or rebound
-methods, inheritance, class keywords such as metaclasses, unresolved instance
-receivers, ambiguity, or other insufficient static evidence remain separate
-from confirmed `CALL` relationships.
+C5J-A1 adds `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` for one deliberately narrow
+local instance shape. A direct top-level function may confirm
+`worker.execute()` when the immediately preceding direct statement assigns
+`worker = Worker()`, `Worker()` has no arguments or keywords, that constructor
+call is already positively resolved to one stable internal class, and the
+requested method satisfies the existing stable class-member proof.
+
+Explicit module/class attribute calls affected by caller or target mutation,
+decorated or rebound methods, inheritance, class keywords such as metaclasses,
+ambiguity, or other insufficient static evidence remain separate from
+confirmed `CALL` relationships. Local instance calls also remain unconfirmed
+when the narrow constructor proof does not apply, including factory results,
+constructor arguments, receiver parameters, intervening statements,
+nested-expression method calls, explicit `__new__`, `__init__`, or
+`__getattribute__` bindings, and arbitrary receivers whose type cannot be
+proven.
 
 Dynamic Python call evidence is additionally classified where deterministic
 syntax or compiler binding evidence permits it. Current dynamic kinds include
@@ -190,14 +202,17 @@ modules.
 
 The `--trace` analyzer currently consumes confirmed internal Python imports,
 conservative direct-name call candidates, compiler-assisted shadowing evidence,
-AST-assisted binding checks, and positively proven internal calls. Confirmed
-calls may currently be proven through either a stable internal import binding
-or the conservative same-file stable-binding proof; remaining candidates
-continue to be rendered with explicit uncertainty.
+AST-assisted binding checks, structured dynamic-call classification, and
+positively proven internal calls. Confirmed calls may currently be proven
+through stable direct-name bindings, the conservative C5I module/class
+attribute proofs, or the narrow C5J-A1 local constructor-instance proof.
+Remaining relationships continue to be rendered with explicit uncertainty.
 
-Attribute-chain and method resolution, broader dynamic-call classification,
-additional binding proofs, routes, APIs, file operations, exports, database
-usage, and additional parser languages remain later stages.
+Broader instance propagation, factory return-type inference, inheritance and
+MRO resolution, `super()` semantics, decorated method semantics,
+`staticmethod` and `classmethod` behavior, deeper attribute chains, routes,
+APIs, file operations, exports, database usage, and additional parser languages
+remain later stages.
 
 ## Future detection layers
 

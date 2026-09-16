@@ -2284,6 +2284,493 @@ def _resolve_class_attribute_call(
         proof=proof,
     )
 
+def _direct_function_scope_node(
+    *,
+    tree: ast.Module | None,
+    scope: str | None,
+) -> ast.FunctionDef | ast.AsyncFunctionDef | None:
+    if (
+        tree is None
+        or scope is None
+        or "." in scope
+    ):
+        return None
+
+    matches = tuple(
+        node
+        for node in tree.body
+        if (
+            isinstance(
+                node,
+                (
+                    ast.FunctionDef,
+                    ast.AsyncFunctionDef,
+                ),
+            )
+            and node.name == scope
+        )
+    )
+
+    if len(matches) != 1:
+        return None
+
+    return matches[0]
+
+
+def _matching_attribute_call_node(
+    *,
+    tree: ast.Module,
+    target_parts: tuple[str, ...],
+    call_line: int,
+) -> ast.Call | None:
+    matches: list[ast.Call] = []
+
+    for node in ast.walk(
+        tree
+    ):
+        if (
+            not isinstance(
+                node,
+                ast.Call,
+            )
+            or node.lineno != call_line
+        ):
+            continue
+
+        parts: list[str] = []
+        current: ast.AST = node.func
+
+        while isinstance(
+            current,
+            ast.Attribute,
+        ):
+            parts.append(
+                current.attr
+            )
+            current = current.value
+
+        if not isinstance(
+            current,
+            ast.Name,
+        ):
+            continue
+
+        parts.append(
+            current.id
+        )
+
+        if tuple(
+            reversed(
+                parts
+            )
+        ) == target_parts:
+            matches.append(
+                node
+            )
+
+    if len(matches) != 1:
+        return None
+
+    return matches[0]
+
+
+def _direct_function_statement(
+    *,
+    node: ast.AST,
+    function_node: (
+        ast.FunctionDef
+        | ast.AsyncFunctionDef
+    ),
+    parent_by_child: dict[
+        ast.AST,
+        ast.AST,
+    ],
+) -> ast.stmt | None:
+    child = node
+    parent = parent_by_child.get(
+        node
+    )
+
+    while parent is not None:
+        if parent is function_node:
+            return (
+                child
+                if isinstance(
+                    child,
+                    ast.stmt,
+                )
+                else None
+            )
+
+        if isinstance(
+            parent,
+            (
+                ast.FunctionDef,
+                ast.AsyncFunctionDef,
+                ast.Lambda,
+                ast.ClassDef,
+                ast.ListComp,
+                ast.SetComp,
+                ast.DictComp,
+                ast.GeneratorExp,
+            ),
+        ):
+            return None
+
+        child = parent
+        parent = parent_by_child.get(
+            parent
+        )
+
+    return None
+
+
+def _statement_is_direct_call(
+    *,
+    statement: ast.stmt,
+    call: ast.Call,
+) -> bool:
+    if isinstance(
+        statement,
+        ast.Expr,
+    ):
+        return statement.value is call
+
+    if isinstance(
+        statement,
+        ast.Return,
+    ):
+        return statement.value is call
+
+    if isinstance(
+        statement,
+        ast.Assign,
+    ):
+        return statement.value is call
+
+    if isinstance(
+        statement,
+        ast.AnnAssign,
+    ):
+        return statement.value is call
+
+    return False
+
+
+def _class_allows_direct_instance_method_proof(
+    *,
+    tree: ast.Module | None,
+    class_target: CallTarget,
+) -> bool:
+    class_node = (
+        _find_direct_class_definition(
+            tree=tree,
+            target=class_target,
+        )
+    )
+
+    if (
+        tree is None
+        or class_node is None
+        or class_node.bases
+        or class_node.keywords
+    ):
+        return False
+
+    for name in (
+        "__new__",
+        "__init__",
+        "__getattribute__",
+    ):
+        if _class_binding_sites(
+            tree=tree,
+            class_node=class_node,
+            name=name,
+        ):
+            return False
+
+    return True
+
+
+def _resolve_local_instance_attribute_call(
+    *,
+    source_path: str,
+    evidence,
+    qualified_symbols: dict[
+        tuple[str, str],
+        tuple[CallTarget, ...],
+    ],
+    prior_resolutions: Sequence[
+        CallResolution
+    ],
+    symbol_tables: dict[
+        str,
+        symtable.SymbolTable,
+    ],
+    syntax_trees: dict[
+        str,
+        ast.Module,
+    ],
+) -> CallResolution | None:
+    if (
+        len(evidence.target_parts) != 2
+        or evidence.scope is None
+        or "." in evidence.scope
+    ):
+        return None
+
+    tree = syntax_trees.get(
+        source_path
+    )
+
+    if tree is None:
+        return None
+
+    if _attribute_call_has_implicit_scope(
+        tree=tree,
+        target_parts=evidence.target_parts,
+        call_line=evidence.line,
+    ):
+        return None
+
+    function_node = (
+        _direct_function_scope_node(
+            tree=tree,
+            scope=evidence.scope,
+        )
+    )
+
+    method_call = (
+        _matching_attribute_call_node(
+            tree=tree,
+            target_parts=evidence.target_parts,
+            call_line=evidence.line,
+        )
+    )
+
+    if (
+        function_node is None
+        or method_call is None
+    ):
+        return None
+
+    parent_by_child = (
+        _ast_parent_map(
+            tree
+        )
+    )
+
+    method_statement = (
+        _direct_function_statement(
+            node=method_call,
+            function_node=function_node,
+            parent_by_child=parent_by_child,
+        )
+    )
+
+    if (
+        method_statement is None
+        or not _statement_is_direct_call(
+            statement=method_statement,
+            call=method_call,
+        )
+    ):
+        return None
+
+    method_index = next(
+        (
+            position
+            for position, statement
+            in enumerate(
+                function_node.body
+            )
+            if statement is method_statement
+        ),
+        None,
+    )
+
+    if (
+        method_index is None
+        or method_index == 0
+    ):
+        return None
+
+    assignment = (
+        function_node.body[
+            method_index - 1
+        ]
+    )
+
+    receiver_name, member_name = (
+        evidence.target_parts
+    )
+
+    if (
+        not isinstance(
+            assignment,
+            ast.Assign,
+        )
+        or len(assignment.targets) != 1
+        or not isinstance(
+            assignment.targets[0],
+            ast.Name,
+        )
+        or assignment.targets[0].id
+        != receiver_name
+        or not isinstance(
+            assignment.value,
+            ast.Call,
+        )
+        or not isinstance(
+            assignment.value.func,
+            ast.Name,
+        )
+        or assignment.value.args
+        or assignment.value.keywords
+        or assignment.lineno
+        >= evidence.line
+    ):
+        return None
+
+    receiver_symbol = _scope_symbol(
+        symbol_tables.get(
+            source_path
+        ),
+        evidence.scope,
+        receiver_name,
+    )
+
+    if (
+        receiver_symbol is None
+        or not receiver_symbol.is_local()
+        or not receiver_symbol.is_assigned()
+        or receiver_symbol.is_parameter()
+        or receiver_symbol.is_imported()
+        or receiver_symbol.is_nonlocal()
+        or receiver_symbol.is_free()
+        or receiver_symbol.is_global()
+    ):
+        return None
+
+    constructor_name = (
+        assignment.value.func.id
+    )
+
+    constructor_resolutions = tuple(
+        resolution
+        for resolution in prior_resolutions
+        if (
+            resolution.source_path
+            == source_path
+            and resolution.evidence.scope
+            == evidence.scope
+            and resolution.evidence.line
+            == assignment.value.lineno
+            and resolution.evidence.target_kind
+            is CallTargetKind.NAME
+            and resolution.evidence.target_parts
+            == (constructor_name,)
+            and resolution.status
+            is CallResolutionStatus.RESOLVED_INTERNAL
+            and resolution.resolved_target
+            is not None
+            and resolution.resolved_target.kind
+            is SymbolKind.CLASS
+        )
+    )
+
+    if len(
+        constructor_resolutions
+    ) != 1:
+        return None
+
+    class_target = (
+        constructor_resolutions[0]
+        .resolved_target
+    )
+
+    target_tree = syntax_trees.get(
+        class_target.source_path
+    )
+
+    stable_class_target, _ = (
+        _confirmed_same_file_target(
+            tree=target_tree,
+            target_name=(
+                class_target.qualified_name
+            ),
+            call_line=0,
+            call_executes_during_module_initialization=False,
+            ordered_candidates=(
+                class_target,
+            ),
+            same_file_candidates=(
+                class_target,
+            ),
+        )
+    )
+
+    if (
+        stable_class_target is None
+        or not _class_allows_direct_instance_method_proof(
+            tree=target_tree,
+            class_target=class_target,
+        )
+        or _named_receiver_attribute_mutation_exists(
+            tree=tree,
+            receiver_name=receiver_name,
+            member_name=member_name,
+        )
+    ):
+        return None
+
+    member_candidates = (
+        _ordered_unique_targets(
+            qualified_symbols.get(
+                (
+                    class_target.source_path,
+                    (
+                        f"{class_target.qualified_name}"
+                        f".{member_name}"
+                    ),
+                ),
+                (),
+            )
+        )
+    )
+
+    if len(
+        member_candidates
+    ) != 1:
+        return None
+
+    member_target = (
+        member_candidates[0]
+    )
+
+    if _confirmed_class_member_target(
+        tree=target_tree,
+        class_target=class_target,
+        member_target=member_target,
+    ) is None:
+        return None
+
+    return CallResolution(
+        source_path=source_path,
+        evidence=evidence,
+        status=(
+            CallResolutionStatus
+            .RESOLVED_INTERNAL
+        ),
+        candidate_targets=(
+            member_target,
+        ),
+        resolved_target=member_target,
+        proof=(
+            CallResolutionProof
+            .LOCAL_INSTANCE_CONSTRUCTOR_BINDING
+        ),
+    )
 
 def _symbol_tables_by_path(
     index: SemanticProjectIndex,
@@ -2596,6 +3083,35 @@ def resolve_python_calls(
             ):
                 resolutions.append(
                     class_attribute_resolution
+                )
+
+                continue
+
+            instance_attribute_resolution = (
+                _resolve_local_instance_attribute_call(
+                    source_path=source_path,
+                    evidence=evidence,
+                    qualified_symbols=(
+                        qualified_symbols
+                    ),
+                    prior_resolutions=(
+                        resolutions
+                    ),
+                    symbol_tables=(
+                        symbol_tables
+                    ),
+                    syntax_trees=(
+                        syntax_trees
+                    ),
+                )
+            )
+
+            if (
+                instance_attribute_resolution
+                is not None
+            ):
+                resolutions.append(
+                    instance_attribute_resolution
                 )
 
                 continue

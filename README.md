@@ -181,12 +181,24 @@ The existing implementation can:
   `SAME_FILE_CLASS_ATTRIBUTE_BINDING`, and
   `INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING` provenance on those confirmed
   attribute relationships;
-- refuse positive attribute proof when recognized caller-side or target-side
-  mutation makes the binding uncertain, and keep inheritance, explicit class
-  keywords such as metaclasses, and arbitrary instance receivers outside the
-  confirmed relationship set;
-- keep unknown instance calls such as `service.execute()` unresolved rather
-  than inferring an instance type that the current static evidence cannot prove.
+- refuse positive explicit module/class attribute proof when recognized
+  caller-side or target-side mutation makes the binding uncertain, while
+  keeping inheritance and explicit class keywords such as metaclasses outside
+  those C5I class-member proofs;
+- positively confirm a narrow local constructor-instance pattern such as
+  `worker = Worker()` followed by `worker.execute()` inside a direct top-level
+  function when the zero-argument constructor call is already proven to resolve
+  to one stable internal class and the requested method satisfies the existing
+  stable class-member proof;
+- retain `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` provenance on those confirmed
+  local instance-method relationships;
+- reject local instance proof for factory results, constructor arguments,
+  intervening statements, nested-expression method calls, receiver parameters,
+  inheritance, explicit class keywords such as metaclasses, explicit
+  `__new__`, `__init__`, or `__getattribute__` bindings, and recognized
+  receiver-member mutation;
+- keep arbitrary instance calls such as `service.execute()` unresolved when no
+  supported constructor-binding proof establishes the receiver type.
 
 ## Language recognition
 

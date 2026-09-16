@@ -278,6 +278,53 @@ class TraceRendererTests(
             rendered,
         )
 
+
+    def test_renderer_shows_confirmed_local_instance_method_call(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "class Worker:\n"
+                        "    def execute(self):\n"
+                        "        return True\n"
+                        "\n"
+                        "def run():\n"
+                        "    worker = Worker()\n"
+                        "    return worker.execute()\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::run` "
+                "→ "
+                "`pkg/app.py::Worker.execute`"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/app.py::Worker.execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::run` "
+                "(line 7)"
+            ),
+            rendered,
+        )
+
     def test_renderer_labels_dynamic_call_kinds(
         self,
     ) -> None:

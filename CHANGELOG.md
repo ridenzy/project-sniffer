@@ -124,6 +124,18 @@ The project is still in pre-1.0 development.
   and `setattr()` mutation, target rebinding, decorated or rebound methods,
   inheritance, class keywords including metaclasses, and unresolved instance
   receivers so uncertain relationships remain outside confirmed `CALL` edges.
+- Positive static proof for a narrow local Python constructor-instance pattern
+  such as `worker = Worker()` followed by `worker.execute()` when the
+  zero-argument constructor call is already proven to resolve to one stable
+  internal class and the requested method satisfies the existing stable class
+  member proof, producing explicit `LOCAL_INSTANCE_CONSTRUCTOR_BINDING`
+  provenance.
+- Conservative local-instance proof guards requiring a direct top-level
+  function scope and an immediately preceding direct constructor assignment,
+  while rejecting constructor arguments, factory results, receiver parameters,
+  intervening statements, nested-expression method calls, inheritance, class
+  keywords including metaclasses, explicit `__new__`, `__init__`, or
+  `__getattribute__` bindings, and recognized receiver-member mutation.
 
 ### Changed
 

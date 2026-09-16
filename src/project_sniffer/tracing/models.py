@@ -58,6 +58,10 @@ class CallResolutionProof(
         "internal_imported_class_attribute_binding"
     )
 
+    LOCAL_INSTANCE_CONSTRUCTOR_BINDING = (
+        "local_instance_constructor_binding"
+    )
+
 class CallShadowReason(
     str,
     Enum,

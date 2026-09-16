@@ -293,6 +293,63 @@ class DependencyGraphTests(
         )
 
 
+    def test_local_instance_method_call_becomes_dependency_edge(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    worker = Worker()\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+        )
+
+        method_edges = tuple(
+            edge
+            for edge in graph.edges
+            if (
+                edge.kind
+                is DependencyKind.CALL
+                and edge.target_symbol
+                == "Worker.execute"
+            )
+        )
+
+        self.assertEqual(
+            len(method_edges),
+            1,
+        )
+
+        edge = method_edges[0]
+
+        self.assertEqual(
+            edge.source_path,
+            "pkg/app.py",
+        )
+
+        self.assertEqual(
+            edge.target_path,
+            "pkg/app.py",
+        )
+
+        self.assertEqual(
+            edge.scope,
+            "run",
+        )
+
+        self.assertEqual(
+            edge.line,
+            7,
+        )
+
+
     def test_uncertain_imports_remain_without_edges(
         self,
     ) -> None:
