@@ -1527,6 +1527,225 @@ class PythonCallResolutionTests(
                     ),
                 )
 
+
+    def test_local_constructor_instance_calls_are_resolved_inside_direct_class_methods(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "same_file_class",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "class Worker:\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                            "\n"
+                            "class Manager:\n"
+                            "    def run(self):\n"
+                            "        worker = Worker()\n"
+                            "        return worker.execute()\n"
+                        ),
+                    ),
+                ),
+                "pkg/app.py",
+            ),
+            (
+                "imported_class",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "from .worker import Worker\n"
+                            "\n"
+                            "class Manager:\n"
+                            "    def run(self):\n"
+                            "        worker = Worker()\n"
+                            "        return worker.execute()\n"
+                        ),
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "class Worker:\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                        ),
+                    ),
+                ),
+                "pkg/worker.py",
+            ),
+            (
+                "imported_alias",
+                (
+                    self.evidence(
+                        "pkg/app.py",
+                        (
+                            "from .worker import Worker as W\n"
+                            "\n"
+                            "class Manager:\n"
+                            "    def run(self):\n"
+                            "        worker = W()\n"
+                            "        return worker.execute()\n"
+                        ),
+                    ),
+                    self.evidence(
+                        "pkg/worker.py",
+                        (
+                            "class Worker:\n"
+                            "    def execute(self):\n"
+                            "        return True\n"
+                        ),
+                    ),
+                ),
+                "pkg/worker.py",
+            ),
+        )
+
+        for (
+            case_name,
+            evidence,
+            expected_path,
+        ) in cases:
+            with self.subTest(
+                case=case_name
+            ):
+                resolutions = self.resolve(
+                    *evidence
+                )
+
+                resolution = next(
+                    item
+                    for item in resolutions
+                    if (
+                        item.evidence.target_parts
+                        == (
+                            "worker",
+                            "execute",
+                        )
+                    )
+                )
+
+                self.assertIs(
+                    resolution.status,
+                    (
+                        CallResolutionStatus
+                        .RESOLVED_INTERNAL
+                    ),
+                )
+
+                self.assertEqual(
+                    resolution.evidence.scope,
+                    "Manager.run",
+                )
+
+                self.assertIsNotNone(
+                    resolution.resolved_target
+                )
+
+                self.assertEqual(
+                    resolution.resolved_target.source_path,
+                    expected_path,
+                )
+
+                self.assertEqual(
+                    resolution.resolved_target.qualified_name,
+                    "Worker.execute",
+                )
+
+                self.assertIs(
+                    resolution.proof,
+                    (
+                        CallResolutionProof
+                        .LOCAL_INSTANCE_CONSTRUCTOR_BINDING
+                    ),
+                )
+
+
+    def test_unproven_dotted_instance_shapes_remain_unresolved(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "self_receiver",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "    def run(self):\n"
+                    "        return self.execute()\n"
+                ),
+                (
+                    "self",
+                    "execute",
+                ),
+                "Worker.run",
+            ),
+            (
+                "nested_function",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "class Manager:\n"
+                    "    def run(self):\n"
+                    "        def inner():\n"
+                    "            worker = Worker()\n"
+                    "            return worker.execute()\n"
+                    "        return inner()\n"
+                ),
+                (
+                    "worker",
+                    "execute",
+                ),
+                "Manager.run.inner",
+            ),
+        )
+
+        for (
+            case_name,
+            source,
+            target_parts,
+            expected_scope,
+        ) in cases:
+            with self.subTest(
+                case=case_name
+            ):
+                resolution = next(
+                    item
+                    for item in self.resolve(
+                        self.evidence(
+                            "pkg/app.py",
+                            source,
+                        ),
+                    )
+                    if (
+                        item.evidence.target_parts
+                        == target_parts
+                    )
+                )
+
+                self.assertEqual(
+                    resolution.evidence.scope,
+                    expected_scope,
+                )
+
+                self.assertIs(
+                    resolution.status,
+                    CallResolutionStatus.UNRESOLVED,
+                )
+
+                self.assertIsNone(
+                    resolution.resolved_target
+                )
+
+                self.assertIsNone(
+                    resolution.proof
+                )
+
     def test_unsafe_local_instance_shapes_remain_unresolved(
         self,
     ) -> None:

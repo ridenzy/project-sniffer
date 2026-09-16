@@ -289,6 +289,12 @@ direct top-level function, an immediately preceding direct assignment such as
 already positively resolved to one stable internal class. The requested member
 must then satisfy the existing stable class-member proof.
 
+C5J-A2 extends that same constructor-backed receiver proof to a direct method of
+a direct top-level class. This is still explicit constructor provenance rather
+than general type inference: lexical `self.member()` calls remain unresolved
+because method scope alone does not prove the runtime receiver type, and deeper
+nested function scopes remain outside the current proof.
+
 Call resolution still distinguishes potential internal, unresolved, ambiguous,
 shadowed, resolved-internal, and dynamic outcomes. Arbitrary instance receivers
 such as `service.execute()` and attribute chains outside the narrow proven
@@ -359,21 +365,24 @@ class keywords such as an explicit metaclass. Decorated or rebound methods,
 caller-side direct attribute assignment, recognized `setattr()` mutation, and
 other unstable binding shapes also prevent positive proof.
 
-C5J-A1 adds one local constructor-instance proof.
+C5J-A1 adds one local constructor-instance proof, and C5J-A2 extends the caller
+scope accepted by that same proof.
 
 `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` confirms a narrow two-part instance method
-call such as `worker.execute()` when a direct top-level function contains an
-immediately preceding direct assignment `worker = Worker()`, the constructor
-has no arguments or keywords, and that constructor call has already been
-positively resolved to one internal class. The class and requested method must
-also satisfy the existing stable class/member checks.
+call such as `worker.execute()` when either a direct top-level function or a
+direct method of a direct top-level class contains an immediately preceding
+direct assignment `worker = Worker()`, the constructor has no arguments or
+keywords, and that constructor call has already been positively resolved to one
+internal class. The class and requested method must also satisfy the existing
+stable class/member checks.
 
 The local-instance proof deliberately does not perform general type inference.
-Factory results, constructor arguments, receiver parameters, intervening
-statements, nested-expression method calls, inheritance, class keywords,
-explicit `__new__`, `__init__`, or `__getattribute__` bindings, and recognized
-receiver-member mutation prevent this proof from confirming the relationship.
-Unknown receivers such as `service.execute()` therefore remain unresolved.
+Factory results, constructor arguments, receiver parameters including lexical
+`self`, intervening statements, nested-expression method calls, deeper nested
+function scopes, inheritance, class keywords, explicit `__new__`, `__init__`,
+or `__getattribute__` bindings, and recognized receiver-member mutation prevent
+this proof from confirming the relationship. Unknown receivers such as
+`service.execute()` therefore remain unresolved.
 
 The resolver uses the already-read Python AST and compiler symbol tables for
 these checks; it does not execute target code or reopen source files.

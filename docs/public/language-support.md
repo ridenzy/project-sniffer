@@ -39,7 +39,8 @@ retain `INTERNAL_MODULE_ATTRIBUTE_BINDING`,
 `INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING` provenance.
 
 C5J-A1 adds `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` for one deliberately narrow
-local instance shape. A direct top-level function may confirm
+local instance shape. C5J-A2 extends that same proof so either a direct
+top-level function or a direct method of a direct top-level class may confirm
 `worker.execute()` when the immediately preceding direct statement assigns
 `worker = Worker()`, `Worker()` has no arguments or keywords, that constructor
 call is already positively resolved to one stable internal class, and the
@@ -50,10 +51,10 @@ decorated or rebound methods, inheritance, class keywords such as metaclasses,
 ambiguity, or other insufficient static evidence remain separate from
 confirmed `CALL` relationships. Local instance calls also remain unconfirmed
 when the narrow constructor proof does not apply, including factory results,
-constructor arguments, receiver parameters, intervening statements,
-nested-expression method calls, explicit `__new__`, `__init__`, or
-`__getattribute__` bindings, and arbitrary receivers whose type cannot be
-proven.
+constructor arguments, receiver parameters such as lexical `self`, intervening
+statements, nested-expression method calls, deeper nested function scopes,
+explicit `__new__`, `__init__`, or `__getattribute__` bindings, and arbitrary
+receivers whose type cannot be proven.
 
 Dynamic Python call evidence is additionally classified where deterministic
 syntax or compiler binding evidence permits it. Current dynamic kinds include

@@ -2292,13 +2292,50 @@ def _direct_function_scope_node(
     if (
         tree is None
         or scope is None
-        or "." in scope
     ):
+        return None
+
+    scope_parts = tuple(
+        scope.split(
+            "."
+        )
+    )
+
+    if len(scope_parts) == 1:
+        container = tree.body
+        function_name = scope_parts[0]
+
+    elif len(scope_parts) == 2:
+        class_name, function_name = (
+            scope_parts
+        )
+
+        class_matches = tuple(
+            node
+            for node in tree.body
+            if (
+                isinstance(
+                    node,
+                    ast.ClassDef,
+                )
+                and node.name
+                == class_name
+            )
+        )
+
+        if len(class_matches) != 1:
+            return None
+
+        container = (
+            class_matches[0].body
+        )
+
+    else:
         return None
 
     matches = tuple(
         node
-        for node in tree.body
+        for node in container
         if (
             isinstance(
                 node,
@@ -2307,7 +2344,8 @@ def _direct_function_scope_node(
                     ast.AsyncFunctionDef,
                 ),
             )
-            and node.name == scope
+            and node.name
+            == function_name
         )
     )
 
@@ -2515,7 +2553,6 @@ def _resolve_local_instance_attribute_call(
     if (
         len(evidence.target_parts) != 2
         or evidence.scope is None
-        or "." in evidence.scope
     ):
         return None
 

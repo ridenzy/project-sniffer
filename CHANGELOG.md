@@ -130,11 +130,15 @@ The project is still in pre-1.0 development.
   internal class and the requested method satisfies the existing stable class
   member proof, producing explicit `LOCAL_INSTANCE_CONSTRUCTOR_BINDING`
   provenance.
-- Conservative local-instance proof guards requiring a direct top-level
-  function scope and an immediately preceding direct constructor assignment,
-  while rejecting constructor arguments, factory results, receiver parameters,
-  intervening statements, nested-expression method calls, inheritance, class
-  keywords including metaclasses, explicit `__new__`, `__init__`, or
+- C5J-A2 extends `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` to direct methods of
+  direct top-level classes while preserving the same immediately preceding
+  constructor assignment and stable class/member requirements.
+- Conservative local-instance proof guards now require either a direct top-level
+  function or a direct method of a direct top-level class, while keeping lexical
+  `self`/receiver parameters and deeper nested function scopes unconfirmed and
+  continuing to reject constructor arguments, factory results, intervening
+  statements, nested-expression method calls, inheritance, class keywords
+  including metaclasses, explicit `__new__`, `__init__`, or
   `__getattribute__` bindings, and recognized receiver-member mutation.
 
 ### Changed
