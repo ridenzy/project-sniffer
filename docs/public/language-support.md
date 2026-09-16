@@ -23,7 +23,7 @@ Phase 2F-C provides level-4 analyzer support for confirmed internal Python
 imports, conservative call-candidate resolution, compiler-assisted shadowing
 rejection, and the first positively proven internal Python call relationships.
 
-Confirmed calls currently use six narrow Python proof kinds.
+Confirmed calls currently use eight narrow Python proof kinds.
 
 Two proofs cover direct-name calls: a stable resolved internal import binding
 and a stable same-file direct top-level binding. Import proof uses compiler
@@ -51,10 +51,22 @@ direct statements. Passive gaps are limited to `pass`, constant expression
 statements, and plain assignments to non-receiver names whose values contain
 only constants, non-receiver loaded names, tuples, or lists of those values.
 
+C5J-B1 adds two inheritance-specific positive proofs for one deliberately
+narrow same-file, one-hop inheritance shape.
+`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` resolves a supported
+`Worker.execute(...)` call to the stable declaring method `Base.execute`.
+`LOCAL_INSTANCE_INHERITED_METHOD_BINDING` applies the same inherited-member
+proof to an existing A1/A2/A3 constructor-backed local instance such as
+`worker.execute()`.
+
 Explicit module/class attribute calls affected by caller or target mutation,
-decorated or rebound methods, inheritance, class keywords such as metaclasses,
-ambiguity, or other insufficient static evidence remain separate from confirmed
-`CALL` relationships. Local instance calls also remain unconfirmed when the
+decorated or rebound methods, unsupported inheritance shapes, class keywords
+such as metaclasses, ambiguity, or other insufficient static evidence remain
+separate from confirmed `CALL` relationships. C5J-B1 supports only one
+same-file inheritance hop through one plain-name direct base with a stable
+direct inherited method.
+
+Local instance calls also remain unconfirmed when the
 narrow constructor proof does not apply, including factory results, constructor
 arguments, receiver parameters such as lexical `self`, receiver rebinding,
 deletion, aliasing, receiver-dependent assignments, intervening calls or
@@ -211,9 +223,9 @@ The `--trace` analyzer currently consumes confirmed internal Python imports,
 conservative direct-name call candidates, compiler-assisted shadowing evidence,
 AST-assisted binding checks, structured dynamic-call classification, and
 positively proven internal calls. Confirmed calls may currently be proven
-through stable direct-name bindings, the conservative C5I module/class
-attribute proofs, or the narrow C5J-A1 local constructor-instance proof.
-Remaining relationships continue to be rendered with explicit uncertainty.
+through stable direct-name bindings, the conservative C5I module/class attribute proofs, the C5J
+constructor-backed local-instance proof family, or the narrow C5J-B1 one-hop
+same-file inherited-member proofs.
 
 Broader instance propagation, factory return-type inference, inheritance and
 MRO resolution, `super()` semantics, decorated method semantics,

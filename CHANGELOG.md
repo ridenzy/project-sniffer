@@ -149,6 +149,24 @@ The project is still in pre-1.0 development.
   inheritance, class keywords including metaclasses, explicit `__new__`,
   `__init__`, or `__getattribute__` bindings, and recognized receiver-member
   mutation.
+- C5J-B1 adds conservative one-hop same-file Python inheritance resolution for
+  inherited direct methods when a stable direct top-level child class has
+  exactly one plain-name base, that base is one stable same-file top-level
+  class, and the requested member is one stable direct undecorated method on
+  that base.
+- Inherited `Class.method(...)` calls retain explicit
+  `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` provenance, while supported
+  constructor-backed `worker.method()` calls retain
+  `LOCAL_INSTANCE_INHERITED_METHOD_BINDING` provenance and resolve to the
+  method's declaring base-class symbol.
+- Added `project_sniffer.tracing.python.inheritance` as the narrow structural
+  inheritance helper while binding stability and positive call proof remain
+  owned by the Python call resolver.
+- One-hop inheritance proof remains conservative around multiple or deeper
+  inheritance, non-name base expressions, class keywords and metaclasses,
+  decorated or rebound base methods, competing child member bindings,
+  `__init_subclass__`, `__bases__` mutation, and relevant `__new__`,
+  `__init__`, or `__getattribute__` behavior.
 
 ### Changed
 

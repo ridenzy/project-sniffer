@@ -543,5 +543,120 @@ class CallIndexTests(
         )
 
 
+    def test_same_file_one_hop_inherited_calls_enter_call_index(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Base:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    pass\n"
+                    "\n"
+                    "def class_call():\n"
+                    "    return Worker.execute(None)\n"
+                    "\n"
+                    "def instance_call():\n"
+                    "    worker = Worker()\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(
+            graph
+        )
+
+        class_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="class_call",
+            )
+        )
+
+        self.assertEqual(
+            tuple(
+                (
+                    edge.target_symbol,
+                    edge.line,
+                )
+                for edge in class_entry.edges
+            ),
+            (
+                (
+                    "Base.execute",
+                    9,
+                ),
+            ),
+        )
+
+        instance_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="instance_call",
+            )
+        )
+
+        self.assertEqual(
+            tuple(
+                (
+                    edge.target_symbol,
+                    edge.line,
+                )
+                for edge in instance_entry.edges
+            ),
+            (
+                (
+                    "Worker",
+                    12,
+                ),
+                (
+                    "Base.execute",
+                    13,
+                ),
+            ),
+        )
+
+        inherited_entry = next(
+            entry
+            for entry in call_index.inbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="Base.execute",
+            )
+        )
+
+        self.assertEqual(
+            tuple(
+                (
+                    edge.scope,
+                    edge.line,
+                )
+                for edge in inherited_entry.edges
+            ),
+            (
+                (
+                    "class_call",
+                    9,
+                ),
+                (
+                    "instance_call",
+                    13,
+                ),
+            ),
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -197,12 +197,26 @@ The existing implementation can:
   statements;
 - retain `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` provenance on those confirmed
   local instance-method relationships;
+- positively confirm a conservative one-hop same-file inheritance shape such
+  as `class Worker(Base): ...` when `Worker` has exactly one plain-name direct
+  base, both classes are stable direct top-level bindings in the same source
+  file, the child has no competing binding for the requested member, and the
+  member is one stable direct undecorated method declared on `Base`;
+- resolve supported inherited `Worker.execute(...)` calls to the actual
+  declaring symbol `Base.execute` with
+  `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` provenance;
+- extend the existing constructor-backed local-instance path so a proven
+  `worker = Worker()` may resolve `worker.execute()` to `Base.execute` with
+  `LOCAL_INSTANCE_INHERITED_METHOD_BINDING` provenance when the existing
+  constructor/passive-gap requirements and the additional inheritance safety
+  checks all succeed;
 - reject local instance proof for receiver rebinding, deletion, aliasing,
   receiver-dependent assignments, intervening calls or control flow, factory
   results, constructor arguments, nested-expression method calls, receiver
-  parameters, deeper nested function scopes, inheritance, explicit class
-  keywords such as metaclasses, explicit `__new__`, `__init__`, or
-  `__getattribute__` bindings, and recognized receiver-member mutation;
+  parameters, deeper nested function scopes, unsupported inheritance shapes,
+  explicit class keywords such as metaclasses, unsafe `__new__`, `__init__`,
+  or `__getattribute__` bindings, and recognized receiver/member or inheritance
+  mutation;
 - keep lexical `self.member()` calls and arbitrary instance calls such as
   `service.execute()` unresolved when no supported constructor-binding proof
   establishes the receiver type.

@@ -272,6 +272,13 @@ own positive static proof succeeds.
 `project_sniffer.tracing.python.calls` consumes the shared
 `SemanticProjectIndex` together with the existing Python import resolutions.
 
+`project_sniffer.tracing.python.inheritance` provides the deliberately narrow
+structural inheritance primitive used by the call resolver. It recognizes only
+one direct plain-name base from an already-read Python `ClassDef`; it does not
+perform independent symbol resolution, MRO computation, or binding-stability
+proof. Those responsibilities remain in
+`project_sniffer.tracing.python.calls`.
+
 The current resolver handles direct-name calls conservatively and also supports
 a narrow two-part attribute-call subset. Direct-name candidates can come from
 same-file top-level symbols or already-resolved internal
@@ -304,6 +311,20 @@ constants, non-receiver loaded names, tuples, or lists of those values.
 Receiver-dependent assignments, rebinding, deletion, aliasing, calls, control
 flow, and other unmodelled statement shapes stop the proof rather than being
 treated as harmless.
+
+C5J-B1 adds a separate conservative inheritance-aware path. A stable same-file
+direct top-level child class may inherit one requested method from one stable
+same-file direct top-level base when the child has exactly one plain-name base,
+the base itself has no further base or class keywords, the child does not
+define or mutate the requested member, and the requested base member satisfies
+the existing stable direct-method proof.
+
+For class-receiver calls, a supported `Worker.execute(...)` relationship
+resolves to the declaring symbol `Base.execute`. For local constructor-backed
+instance calls, the existing A1/A2/A3 constructor provenance is still required
+before `worker.execute()` may resolve to that same inherited base member.
+Inheritance support therefore extends the existing proof chain rather than
+replacing constructor or binding proof.
 
 Call resolution still distinguishes potential internal, unresolved, ambiguous,
 shadowed, resolved-internal, and dynamic outcomes. Arbitrary instance receivers
@@ -341,7 +362,7 @@ callable evidence and is retained as a dynamic `callback_parameter` call. If a
 same-file or imported internal candidate exists under that name, the parameter
 continues to be recorded as shadowing that candidate instead.
 
-The resolver currently has six narrow positive proof kinds.
+The resolver currently has eight narrow positive proof kinds.
 
 The first two cover direct-name calls.
 
@@ -370,8 +391,10 @@ method.
 `INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING` applies the same method proof to a
 class reached through one stable direct internal import.
 
-The class-attribute proof deliberately rejects classes with inheritance or
-class keywords such as an explicit metaclass. Decorated or rebound methods,
+The original C5I direct class-attribute proof deliberately rejects classes with
+inheritance or class keywords such as an explicit metaclass. C5J-B1 handles a
+separate, narrower one-hop same-file inherited-member shape rather than
+weakening that direct-member proof. Decorated or rebound methods,
 caller-side direct attribute assignment, recognized `setattr()` mutation, and
 other unstable binding shapes also prevent positive proof.
 
@@ -392,14 +415,31 @@ The passive-gap proof accepts only `pass`, constant expression statements, and
 plain assignments to non-receiver names whose values are composed only of
 constants, non-receiver loaded names, tuples, or lists of those values.
 
+C5J-B1 adds two inheritance-specific proof kinds.
+
+`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` confirms a supported
+`Worker.execute(...)` call when `Worker` is one stable same-file direct
+top-level class with exactly one stable same-file plain-name base and the
+requested member is uniquely and stably declared on that base. The resolved
+target is the declaring base member, such as `Base.execute`, rather than a
+synthetic `Worker.execute` target.
+
+`LOCAL_INSTANCE_INHERITED_METHOD_BINDING` applies inherited-member proof to the
+existing constructor-backed local receiver path. The zero-argument constructor
+must already be positively resolved, A1/A2/A3 receiver-binding and passive-gap
+requirements still apply, the child and base must satisfy the narrow one-hop
+inheritance proof, and relevant `__new__`, `__init__`, and
+`__getattribute__` bindings or mutations prevent confirmation.
+
 The local-instance proof deliberately does not perform general type inference.
 Factory results, constructor arguments, receiver parameters including lexical
 `self`, receiver rebinding, deletion, aliasing, receiver-dependent assignments,
 intervening calls or control flow, nested-expression method calls, deeper nested
-function scopes, inheritance, class keywords, explicit `__new__`, `__init__`,
-or `__getattribute__` bindings, and recognized receiver-member mutation prevent
-this proof from confirming the relationship. Unknown receivers such as
-`service.execute()` therefore remain unresolved.
+function scopes, unsupported inheritance shapes, class keywords, unsafe
+`__new__`, `__init__`, or `__getattribute__` bindings, and recognized
+receiver/member or inheritance mutation prevent this proof from confirming the
+relationship. Unknown receivers such as `service.execute()` therefore remain
+unresolved.
 
 The resolver uses the already-read Python AST and compiler symbol tables for
 these checks; it does not execute target code or reopen source files.
@@ -410,6 +450,10 @@ not a guarantee that the call executes at runtime.
 `RESOLVED_INTERNAL` calls become `CALL` dependency edges. Candidates that do
 not satisfy positive proof remain potential, shadowed, ambiguous, unresolved,
 or dynamic evidence as appropriate.
+
+Multiple inheritance, deeper inheritance chains, imported or dynamically
+expressed bases, unsupported class keywords, descriptors/decorated inherited
+members, and other inheritance shapes outside C5J-B1 remain unconfirmed.
 
 ## Dependency graph
 

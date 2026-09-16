@@ -26,6 +26,9 @@ from project_sniffer.tracing.models import (
     ImportResolution,
     ImportResolutionStatus,
 )
+from project_sniffer.tracing.python.inheritance import (
+    direct_plain_base_name,
+)
 
 
 def _language_by_path(
@@ -1615,6 +1618,273 @@ def _confirmed_class_member_target(
 
     return member_target
 
+def _confirmed_same_file_direct_base_target(
+    *,
+    tree: ast.Module | None,
+    class_target: CallTarget,
+    top_level_symbols: dict[
+        tuple[str, str],
+        tuple[CallTarget, ...],
+    ],
+) -> CallTarget | None:
+    if tree is None:
+        return None
+
+    class_node = (
+        _find_direct_class_definition(
+            tree=tree,
+            target=class_target,
+        )
+    )
+
+    if class_node is None:
+        return None
+
+    base_name = direct_plain_base_name(
+        class_node
+    )
+
+    if base_name is None:
+        return None
+
+    same_file_base_candidates = tuple(
+        target
+        for target in top_level_symbols.get(
+            (
+                class_target.source_path,
+                base_name,
+            ),
+            (),
+        )
+        if target.kind is SymbolKind.CLASS
+    )
+
+    ordered_base_candidates = (
+        _ordered_unique_targets(
+            same_file_base_candidates
+        )
+    )
+
+    base_target, _ = (
+        _confirmed_same_file_target(
+            tree=tree,
+            target_name=base_name,
+            call_line=class_node.lineno,
+            call_executes_during_module_initialization=True,
+            ordered_candidates=(
+                ordered_base_candidates
+            ),
+            same_file_candidates=(
+                same_file_base_candidates
+            ),
+        )
+    )
+
+    if base_target is None:
+        return None
+
+    base_node = (
+        _find_direct_class_definition(
+            tree=tree,
+            target=base_target,
+        )
+    )
+
+    if (
+        base_node is None
+        or base_node.bases
+        or base_node.keywords
+    ):
+        return None
+
+    if _class_binding_sites(
+        tree=tree,
+        class_node=base_node,
+        name="__init_subclass__",
+    ):
+        return None
+
+    if _named_receiver_attribute_mutation_exists(
+        tree=tree,
+        receiver_name=(
+            base_target.qualified_name
+        ),
+        member_name="__init_subclass__",
+    ):
+        return None
+
+    if _named_receiver_attribute_mutation_exists(
+        tree=tree,
+        receiver_name=(
+            class_target.qualified_name
+        ),
+        member_name="__bases__",
+    ):
+        return None
+
+    return base_target
+
+
+def _confirmed_same_file_inherited_member_target(
+    *,
+    tree: ast.Module | None,
+    class_target: CallTarget,
+    member_name: str,
+    top_level_symbols: dict[
+        tuple[str, str],
+        tuple[CallTarget, ...],
+    ],
+    qualified_symbols: dict[
+        tuple[str, str],
+        tuple[CallTarget, ...],
+    ],
+) -> tuple[
+    CallTarget,
+    CallTarget,
+] | None:
+    if tree is None:
+        return None
+
+    class_node = (
+        _find_direct_class_definition(
+            tree=tree,
+            target=class_target,
+        )
+    )
+
+    if class_node is None:
+        return None
+
+    if _class_binding_sites(
+        tree=tree,
+        class_node=class_node,
+        name=member_name,
+    ):
+        return None
+
+    if _named_receiver_attribute_mutation_exists(
+        tree=tree,
+        receiver_name=(
+            class_target.qualified_name
+        ),
+        member_name=member_name,
+    ):
+        return None
+
+    base_target = (
+        _confirmed_same_file_direct_base_target(
+            tree=tree,
+            class_target=class_target,
+            top_level_symbols=(
+                top_level_symbols
+            ),
+        )
+    )
+
+    if base_target is None:
+        return None
+
+    member_candidates = (
+        _ordered_unique_targets(
+            qualified_symbols.get(
+                (
+                    base_target.source_path,
+                    (
+                        f"{base_target.qualified_name}"
+                        f".{member_name}"
+                    ),
+                ),
+                (),
+            )
+        )
+    )
+
+    if len(member_candidates) != 1:
+        return None
+
+    member_target = (
+        member_candidates[0]
+    )
+
+    if _confirmed_class_member_target(
+        tree=tree,
+        class_target=base_target,
+        member_target=member_target,
+    ) is None:
+        return None
+
+    return (
+        base_target,
+        member_target,
+    )
+
+
+def _classes_allow_inherited_instance_method_proof(
+    *,
+    tree: ast.Module | None,
+    class_target: CallTarget,
+    base_target: CallTarget,
+) -> bool:
+    if tree is None:
+        return False
+
+    class_node = (
+        _find_direct_class_definition(
+            tree=tree,
+            target=class_target,
+        )
+    )
+
+    base_node = (
+        _find_direct_class_definition(
+            tree=tree,
+            target=base_target,
+        )
+    )
+
+    if (
+        class_node is None
+        or base_node is None
+    ):
+        return False
+
+    special_names = (
+        "__new__",
+        "__init__",
+        "__getattribute__",
+    )
+
+    for (
+        target,
+        node,
+    ) in (
+        (
+            class_target,
+            class_node,
+        ),
+        (
+            base_target,
+            base_node,
+        ),
+    ):
+        for name in special_names:
+            if _class_binding_sites(
+                tree=tree,
+                class_node=node,
+                name=name,
+            ):
+                return False
+
+            if _named_receiver_attribute_mutation_exists(
+                tree=tree,
+                receiver_name=(
+                    target.qualified_name
+                ),
+                member_name=name,
+            ):
+                return False
+
+    return True
 
 def _confirmed_module_attribute_target(
     *,
@@ -2130,6 +2400,65 @@ def _resolve_class_attribute_call(
         class_target = None
         class_proof = None
 
+    caller_attribute_mutated = (
+        _named_receiver_attribute_mutation_exists(
+            tree=syntax_trees.get(
+                source_path
+            ),
+            receiver_name=receiver_name,
+            member_name=member_name,
+        )
+    )
+
+    if (
+        class_target is not None
+        and class_proof
+        is (
+            CallResolutionProof
+            .SAME_FILE_STABLE_BINDING
+        )
+        and not caller_attribute_mutated
+    ):
+        target_tree = syntax_trees.get(
+            class_target.source_path
+        )
+
+        inherited_target = (
+            _confirmed_same_file_inherited_member_target(
+                tree=target_tree,
+                class_target=class_target,
+                member_name=member_name,
+                top_level_symbols=(
+                    top_level_symbols
+                ),
+                qualified_symbols=(
+                    qualified_symbols
+                ),
+            )
+        )
+
+        if inherited_target is not None:
+            _, member_target = (
+                inherited_target
+            )
+
+            return CallResolution(
+                source_path=source_path,
+                evidence=evidence,
+                status=(
+                    CallResolutionStatus
+                    .RESOLVED_INTERNAL
+                ),
+                candidate_targets=(
+                    member_target,
+                ),
+                resolved_target=member_target,
+                proof=(
+                    CallResolutionProof
+                    .SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING
+                ),
+            )
+
     member_candidates: list[
         CallTarget
     ] = []
@@ -2158,16 +2487,6 @@ def _resolve_class_attribute_call(
 
     if not ordered_member_candidates:
         return None
-
-    caller_attribute_mutated = (
-        _named_receiver_attribute_mutation_exists(
-            tree=syntax_trees.get(
-                source_path
-            ),
-            receiver_name=receiver_name,
-            member_name=member_name,
-        )
-    )
 
     resolved_target = None
     proof = None
@@ -2680,6 +2999,10 @@ def _resolve_local_instance_attribute_call(
     *,
     source_path: str,
     evidence,
+    top_level_symbols: dict[
+        tuple[str, str],
+        tuple[CallTarget, ...],
+    ],
     qualified_symbols: dict[
         tuple[str, str],
         tuple[CallTarget, ...],
@@ -2874,10 +3197,6 @@ def _resolve_local_instance_attribute_call(
 
     if (
         stable_class_target is None
-        or not _class_allows_direct_instance_method_proof(
-            tree=target_tree,
-            class_target=class_target,
-        )
         or _named_receiver_attribute_mutation_exists(
             tree=tree,
             receiver_name=receiver_name,
@@ -2886,35 +3205,87 @@ def _resolve_local_instance_attribute_call(
     ):
         return None
 
-    member_candidates = (
-        _ordered_unique_targets(
-            qualified_symbols.get(
-                (
-                    class_target.source_path,
+    if _class_allows_direct_instance_method_proof(
+        tree=target_tree,
+        class_target=class_target,
+    ):
+        member_candidates = (
+            _ordered_unique_targets(
+                qualified_symbols.get(
                     (
-                        f"{class_target.qualified_name}"
-                        f".{member_name}"
+                        class_target.source_path,
+                        (
+                            f"{class_target.qualified_name}"
+                            f".{member_name}"
+                        ),
                     ),
-                ),
-                (),
+                    (),
+                )
             )
+        )
+
+        if len(
+            member_candidates
+        ) != 1:
+            return None
+
+        member_target = (
+            member_candidates[0]
+        )
+
+        if _confirmed_class_member_target(
+            tree=target_tree,
+            class_target=class_target,
+            member_target=member_target,
+        ) is None:
+            return None
+
+        return CallResolution(
+            source_path=source_path,
+            evidence=evidence,
+            status=(
+                CallResolutionStatus
+                .RESOLVED_INTERNAL
+            ),
+            candidate_targets=(
+                member_target,
+            ),
+            resolved_target=member_target,
+            proof=(
+                CallResolutionProof
+                .LOCAL_INSTANCE_CONSTRUCTOR_BINDING
+            ),
+        )
+
+    if class_target.source_path != source_path:
+        return None
+
+    inherited_target = (
+        _confirmed_same_file_inherited_member_target(
+            tree=target_tree,
+            class_target=class_target,
+            member_name=member_name,
+            top_level_symbols=(
+                top_level_symbols
+            ),
+            qualified_symbols=(
+                qualified_symbols
+            ),
         )
     )
 
-    if len(
-        member_candidates
-    ) != 1:
+    if inherited_target is None:
         return None
 
-    member_target = (
-        member_candidates[0]
+    base_target, member_target = (
+        inherited_target
     )
 
-    if _confirmed_class_member_target(
+    if not _classes_allow_inherited_instance_method_proof(
         tree=target_tree,
         class_target=class_target,
-        member_target=member_target,
-    ) is None:
+        base_target=base_target,
+    ):
         return None
 
     return CallResolution(
@@ -2930,7 +3301,7 @@ def _resolve_local_instance_attribute_call(
         resolved_target=member_target,
         proof=(
             CallResolutionProof
-            .LOCAL_INSTANCE_CONSTRUCTOR_BINDING
+            .LOCAL_INSTANCE_INHERITED_METHOD_BINDING
         ),
     )
 
@@ -3253,6 +3624,9 @@ def resolve_python_calls(
                 _resolve_local_instance_attribute_call(
                     source_path=source_path,
                     evidence=evidence,
+                    top_level_symbols=(
+                        symbols
+                    ),
                     qualified_symbols=(
                         qualified_symbols
                     ),

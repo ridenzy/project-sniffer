@@ -424,6 +424,89 @@ class TraceRendererTests(
             rendered,
         )
 
+
+    def test_renderer_shows_same_file_one_hop_inherited_calls(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "class Base:\n"
+                        "    def execute(self):\n"
+                        "        return True\n"
+                        "\n"
+                        "class Worker(Base):\n"
+                        "    pass\n"
+                        "\n"
+                        "def class_call():\n"
+                        "    return Worker.execute(None)\n"
+                        "\n"
+                        "def instance_call():\n"
+                        "    worker = Worker()\n"
+                        "    return worker.execute()\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            "- Resolved internal calls: 3",
+            rendered,
+        )
+
+        self.assertIn(
+            "- Confirmed caller endpoints: 2",
+            rendered,
+        )
+
+        self.assertIn(
+            "- Confirmed callee endpoints: 2",
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::class_call` "
+                "→ "
+                "`pkg/app.py::Base.execute` "
+                "(line 9)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::instance_call` "
+                "→ "
+                "`pkg/app.py::Base.execute` "
+                "(line 13)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/app.py::Base.execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::class_call` "
+                "(line 9)\n"
+                "  - CALLED BY "
+                "`pkg/app.py::instance_call` "
+                "(line 13)"
+            ),
+            rendered,
+        )
+
     def test_renderer_labels_dynamic_call_kinds(
         self,
     ) -> None:

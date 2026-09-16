@@ -61,6 +61,13 @@ class CallResolutionProof(
     LOCAL_INSTANCE_CONSTRUCTOR_BINDING = (
         "local_instance_constructor_binding"
     )
+    SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING = (
+        "same_file_inherited_class_attribute_binding"
+    )
+
+    LOCAL_INSTANCE_INHERITED_METHOD_BINDING = (
+        "local_instance_inherited_method_binding"
+    )
 
 class CallShadowReason(
     str,

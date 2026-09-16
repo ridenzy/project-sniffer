@@ -18,10 +18,11 @@ from project_sniffer.scanning import (
     ScannedFile,
 )
 from project_sniffer.tracing import (
+    CallResolutionProof,
+    CallResolutionStatus,
     DependencyKind,
     ImportResolutionStatus,
     build_dependency_graph,
-    CallResolutionStatus,
 )
 
 
@@ -569,4 +570,103 @@ class DependencyGraphTests(
         self.assertIs(
             edge.resolution,
             graph.call_resolutions[0],
+        )
+
+
+    def test_same_file_one_hop_inherited_calls_become_dependency_edges(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Base:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    pass\n"
+                    "\n"
+                    "def class_call():\n"
+                    "    return Worker.execute(None)\n"
+                    "\n"
+                    "def instance_call():\n"
+                    "    worker = Worker()\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+        )
+
+        inherited_edges = tuple(
+            edge
+            for edge in graph.edges
+            if (
+                edge.kind
+                is DependencyKind.CALL
+                and edge.target_symbol
+                == "Base.execute"
+            )
+        )
+
+        self.assertEqual(
+            len(inherited_edges),
+            2,
+        )
+
+        self.assertEqual(
+            tuple(
+                (
+                    edge.source_path,
+                    edge.target_path,
+                    edge.scope,
+                    edge.line,
+                    edge.resolution.proof,
+                )
+                for edge in inherited_edges
+            ),
+            (
+                (
+                    "pkg/app.py",
+                    "pkg/app.py",
+                    "class_call",
+                    9,
+                    (
+                        CallResolutionProof
+                        .SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING
+                    ),
+                ),
+                (
+                    "pkg/app.py",
+                    "pkg/app.py",
+                    "instance_call",
+                    13,
+                    (
+                        CallResolutionProof
+                        .LOCAL_INSTANCE_INHERITED_METHOD_BINDING
+                    ),
+                ),
+            ),
+        )
+
+        constructor_edges = tuple(
+            edge
+            for edge in graph.edges
+            if (
+                edge.kind
+                is DependencyKind.CALL
+                and edge.scope
+                == "instance_call"
+                and edge.target_symbol
+                == "Worker"
+            )
+        )
+
+        self.assertEqual(
+            len(constructor_edges),
+            1,
+        )
+
+        self.assertEqual(
+            constructor_edges[0].line,
+            12,
         )
