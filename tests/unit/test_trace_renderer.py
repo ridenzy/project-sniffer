@@ -373,6 +373,57 @@ class TraceRendererTests(
             rendered,
         )
 
+
+    def test_renderer_shows_passive_gap_local_instance_call(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "class Worker:\n"
+                        "    def execute(self):\n"
+                        "        return True\n"
+                        "\n"
+                        "class Manager:\n"
+                        "    def run(self):\n"
+                        "        worker = Worker()\n"
+                        "        count = 10\n"
+                        "        label = \"ready\"\n"
+                        "        pass\n"
+                        "        return worker.execute()\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::Manager.run` "
+                "→ "
+                "`pkg/app.py::Worker.execute`"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/app.py::Worker.execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::Manager.run` "
+                "(line 11)"
+            ),
+            rendered,
+        )
+
     def test_renderer_labels_dynamic_call_kinds(
         self,
     ) -> None:

@@ -2495,6 +2495,152 @@ def _statement_is_direct_call(
     return False
 
 
+def _passive_local_instance_gap_expression(
+    node: ast.expr,
+    *,
+    receiver_name: str,
+) -> bool:
+    if isinstance(
+        node,
+        ast.Constant,
+    ):
+        return True
+
+    if isinstance(
+        node,
+        ast.Name,
+    ):
+        return (
+            isinstance(
+                node.ctx,
+                ast.Load,
+            )
+            and node.id
+            != receiver_name
+        )
+
+    if isinstance(
+        node,
+        (
+            ast.Tuple,
+            ast.List,
+        ),
+    ):
+        return all(
+            _passive_local_instance_gap_expression(
+                element,
+                receiver_name=receiver_name,
+            )
+            for element in node.elts
+        )
+
+    return False
+
+
+def _passive_local_instance_gap_statement(
+    statement: ast.stmt,
+    *,
+    receiver_name: str,
+) -> bool:
+    if isinstance(
+        statement,
+        ast.Pass,
+    ):
+        return True
+
+    if (
+        isinstance(
+            statement,
+            ast.Expr,
+        )
+        and isinstance(
+            statement.value,
+            ast.Constant,
+        )
+    ):
+        return True
+
+    if not isinstance(
+        statement,
+        ast.Assign,
+    ):
+        return False
+
+    if not statement.targets:
+        return False
+
+    if not all(
+        isinstance(
+            target,
+            ast.Name,
+        )
+        and target.id
+        != receiver_name
+        for target in statement.targets
+    ):
+        return False
+
+    return (
+        _passive_local_instance_gap_expression(
+            statement.value,
+            receiver_name=receiver_name,
+        )
+    )
+
+
+def _stable_local_constructor_assignment(
+    *,
+    function_node: (
+        ast.FunctionDef
+        | ast.AsyncFunctionDef
+    ),
+    method_index: int,
+    receiver_name: str,
+    call_line: int,
+) -> ast.Assign | None:
+    for statement in reversed(
+        function_node.body[
+            :method_index
+        ]
+    ):
+        if (
+            isinstance(
+                statement,
+                ast.Assign,
+            )
+            and len(
+                statement.targets
+            ) == 1
+            and isinstance(
+                statement.targets[0],
+                ast.Name,
+            )
+            and statement.targets[0].id
+            == receiver_name
+            and isinstance(
+                statement.value,
+                ast.Call,
+            )
+            and isinstance(
+                statement.value.func,
+                ast.Name,
+            )
+            and not statement.value.args
+            and not statement.value.keywords
+            and statement.lineno
+            < call_line
+        ):
+            return statement
+
+        if not _passive_local_instance_gap_statement(
+            statement,
+            receiver_name=receiver_name,
+        ):
+            return None
+
+    return None
+
+
 def _class_allows_direct_instance_method_proof(
     *,
     tree: ast.Module | None,
@@ -2632,41 +2778,20 @@ def _resolve_local_instance_attribute_call(
     ):
         return None
 
-    assignment = (
-        function_node.body[
-            method_index - 1
-        ]
-    )
-
     receiver_name, member_name = (
         evidence.target_parts
     )
 
-    if (
-        not isinstance(
-            assignment,
-            ast.Assign,
+    assignment = (
+        _stable_local_constructor_assignment(
+            function_node=function_node,
+            method_index=method_index,
+            receiver_name=receiver_name,
+            call_line=evidence.line,
         )
-        or len(assignment.targets) != 1
-        or not isinstance(
-            assignment.targets[0],
-            ast.Name,
-        )
-        or assignment.targets[0].id
-        != receiver_name
-        or not isinstance(
-            assignment.value,
-            ast.Call,
-        )
-        or not isinstance(
-            assignment.value.func,
-            ast.Name,
-        )
-        or assignment.value.args
-        or assignment.value.keywords
-        or assignment.lineno
-        >= evidence.line
-    ):
+    )
+
+    if assignment is None:
         return None
 
     receiver_symbol = _scope_symbol(

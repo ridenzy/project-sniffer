@@ -1746,6 +1746,208 @@ class PythonCallResolutionTests(
                     resolution.proof
                 )
 
+
+    def test_local_constructor_instance_calls_survive_passive_intervening_statements(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "top_level_function",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    worker = Worker()\n"
+                    "    count = 10\n"
+                    "    label = \"ready\"\n"
+                    "    pass\n"
+                    "    return worker.execute()\n"
+                ),
+                "run",
+            ),
+            (
+                "direct_class_method",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "class Manager:\n"
+                    "    def run(self):\n"
+                    "        worker = Worker()\n"
+                    "        count = 10\n"
+                    "        label = \"ready\"\n"
+                    "        pass\n"
+                    "        return worker.execute()\n"
+                ),
+                "Manager.run",
+            ),
+        )
+
+        for (
+            case_name,
+            source,
+            expected_scope,
+        ) in cases:
+            with self.subTest(
+                case=case_name
+            ):
+                resolution = next(
+                    item
+                    for item in self.resolve(
+                        self.evidence(
+                            "pkg/app.py",
+                            source,
+                        ),
+                    )
+                    if (
+                        item.evidence.target_parts
+                        == (
+                            "worker",
+                            "execute",
+                        )
+                    )
+                )
+
+                self.assertIs(
+                    resolution.status,
+                    (
+                        CallResolutionStatus
+                        .RESOLVED_INTERNAL
+                    ),
+                )
+
+                self.assertEqual(
+                    resolution.evidence.scope,
+                    expected_scope,
+                )
+
+                self.assertIsNotNone(
+                    resolution.resolved_target
+                )
+
+                self.assertEqual(
+                    resolution.resolved_target.qualified_name,
+                    "Worker.execute",
+                )
+
+                self.assertIs(
+                    resolution.proof,
+                    (
+                        CallResolutionProof
+                        .LOCAL_INSTANCE_CONSTRUCTOR_BINDING
+                    ),
+                )
+
+
+    def test_local_constructor_instance_gap_rejects_binding_and_effectful_changes(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "receiver_rebound",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    worker = Worker()\n"
+                    "    worker = replacement\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+            (
+                "receiver_deleted",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    worker = Worker()\n"
+                    "    del worker\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+            (
+                "receiver_aliased",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    worker = Worker()\n"
+                    "    alias = worker\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+            (
+                "intervening_call",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    worker = Worker()\n"
+                    "    other()\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+            (
+                "conditional_rebinding",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def run(flag):\n"
+                    "    worker = Worker()\n"
+                    "    if flag:\n"
+                    "        worker = replacement\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+        )
+
+        for case_name, source in cases:
+            with self.subTest(
+                case=case_name
+            ):
+                resolution = next(
+                    item
+                    for item in self.resolve(
+                        self.evidence(
+                            "pkg/app.py",
+                            source,
+                        ),
+                    )
+                    if (
+                        item.evidence.target_parts
+                        == (
+                            "worker",
+                            "execute",
+                        )
+                    )
+                )
+
+                self.assertIs(
+                    resolution.status,
+                    CallResolutionStatus.UNRESOLVED,
+                )
+
+                self.assertIsNone(
+                    resolution.resolved_target
+                )
+
+                self.assertIsNone(
+                    resolution.proof
+                )
+
     def test_unsafe_local_instance_shapes_remain_unresolved(
         self,
     ) -> None:
@@ -1766,7 +1968,7 @@ class PythonCallResolutionTests(
                 ),
             ),
             (
-                "intervening_statement",
+                "intervening_call",
                 (
                     "class Worker:\n"
                     "    def execute(self):\n"

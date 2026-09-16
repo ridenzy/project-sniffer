@@ -133,13 +133,22 @@ The project is still in pre-1.0 development.
 - C5J-A2 extends `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` to direct methods of
   direct top-level classes while preserving the same immediately preceding
   constructor assignment and stable class/member requirements.
-- Conservative local-instance proof guards now require either a direct top-level
-  function or a direct method of a direct top-level class, while keeping lexical
-  `self`/receiver parameters and deeper nested function scopes unconfirmed and
-  continuing to reject constructor arguments, factory results, intervening
-  statements, nested-expression method calls, inheritance, class keywords
-  including metaclasses, explicit `__new__`, `__init__`, or
-  `__getattribute__` bindings, and recognized receiver-member mutation.
+- C5J-A3 extends `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` across a bounded sequence
+  of strictly passive intervening statements while preserving the existing
+  zero-argument constructor, stable class/member, direct caller-scope, and
+  mutation requirements.
+- Passive local-instance gaps are limited to `pass`, constant expression
+  statements, and plain assignments to non-receiver names whose values contain
+  only constants, non-receiver loaded names, tuples, or lists of those values.
+- Conservative local-instance proof guards still require either a direct
+  top-level function or a direct method of a direct top-level class, while
+  keeping lexical `self`/receiver parameters and deeper nested function scopes
+  unconfirmed and rejecting receiver rebinding, deletion, aliasing,
+  receiver-dependent assignments, intervening calls or control flow,
+  constructor arguments, factory results, nested-expression method calls,
+  inheritance, class keywords including metaclasses, explicit `__new__`,
+  `__init__`, or `__getattribute__` bindings, and recognized receiver-member
+  mutation.
 
 ### Changed
 

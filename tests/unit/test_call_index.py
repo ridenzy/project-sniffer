@@ -425,6 +425,71 @@ class CallIndexTests(
         )
 
 
+    def test_passive_gap_local_instance_call_enters_call_index(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "class Manager:\n"
+                    "    def run(self):\n"
+                    "        worker = Worker()\n"
+                    "        count = 10\n"
+                    "        label = \"ready\"\n"
+                    "        pass\n"
+                    "        return worker.execute()\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(
+            graph
+        )
+
+        run_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="Manager.run",
+            )
+        )
+
+        self.assertIn(
+            "Worker.execute",
+            tuple(
+                edge.target_symbol
+                for edge in run_entry.edges
+            ),
+        )
+
+        method_entry = next(
+            entry
+            for entry in call_index.inbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="Worker.execute",
+            )
+        )
+
+        self.assertEqual(
+            len(method_entry.edges),
+            1,
+        )
+
+        self.assertEqual(
+            method_entry.edges[0].line,
+            11,
+        )
+
+
     def test_uncertain_calls_do_not_enter_call_index(
         self,
     ) -> None:

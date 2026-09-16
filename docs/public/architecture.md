@@ -295,6 +295,16 @@ than general type inference: lexical `self.member()` calls remain unresolved
 because method scope alone does not prove the runtime receiver type, and deeper
 nested function scopes remain outside the current proof.
 
+C5J-A3 relaxes only the immediate-adjacency requirement of that same proof. A
+constructor assignment may now be reached across zero or more intervening direct
+statements when every such statement satisfies a deliberately narrow passive
+AST whitelist. The accepted forms are `pass`, constant expression statements,
+and plain assignments to non-receiver names whose values contain only
+constants, non-receiver loaded names, tuples, or lists of those values.
+Receiver-dependent assignments, rebinding, deletion, aliasing, calls, control
+flow, and other unmodelled statement shapes stop the proof rather than being
+treated as harmless.
+
 Call resolution still distinguishes potential internal, unresolved, ambiguous,
 shadowed, resolved-internal, and dynamic outcomes. Arbitrary instance receivers
 such as `service.execute()` and attribute chains outside the narrow proven
@@ -365,20 +375,27 @@ class keywords such as an explicit metaclass. Decorated or rebound methods,
 caller-side direct attribute assignment, recognized `setattr()` mutation, and
 other unstable binding shapes also prevent positive proof.
 
-C5J-A1 adds one local constructor-instance proof, and C5J-A2 extends the caller
-scope accepted by that same proof.
+C5J-A1 adds one local constructor-instance proof, C5J-A2 extends the caller
+scope accepted by that same proof, and C5J-A3 permits the constructor provenance
+to survive a bounded sequence of strictly passive intervening statements.
 
 `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` confirms a narrow two-part instance method
 call such as `worker.execute()` when either a direct top-level function or a
-direct method of a direct top-level class contains an immediately preceding
-direct assignment `worker = Worker()`, the constructor has no arguments or
-keywords, and that constructor call has already been positively resolved to one
-internal class. The class and requested method must also satisfy the existing
-stable class/member checks.
+direct method of a direct top-level class contains an earlier direct assignment
+`worker = Worker()`, the constructor has no arguments or keywords, that
+constructor call has already been positively resolved to one internal class,
+and every direct statement between construction and the method call satisfies
+the passive-gap proof. The class and requested method must also satisfy the
+existing stable class/member checks.
+
+The passive-gap proof accepts only `pass`, constant expression statements, and
+plain assignments to non-receiver names whose values are composed only of
+constants, non-receiver loaded names, tuples, or lists of those values.
 
 The local-instance proof deliberately does not perform general type inference.
 Factory results, constructor arguments, receiver parameters including lexical
-`self`, intervening statements, nested-expression method calls, deeper nested
+`self`, receiver rebinding, deletion, aliasing, receiver-dependent assignments,
+intervening calls or control flow, nested-expression method calls, deeper nested
 function scopes, inheritance, class keywords, explicit `__new__`, `__init__`,
 or `__getattribute__` bindings, and recognized receiver-member mutation prevent
 this proof from confirming the relationship. Unknown receivers such as

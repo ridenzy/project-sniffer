@@ -41,18 +41,24 @@ retain `INTERNAL_MODULE_ATTRIBUTE_BINDING`,
 C5J-A1 adds `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` for one deliberately narrow
 local instance shape. C5J-A2 extends that same proof so either a direct
 top-level function or a direct method of a direct top-level class may confirm
-`worker.execute()` when the immediately preceding direct statement assigns
-`worker = Worker()`, `Worker()` has no arguments or keywords, that constructor
-call is already positively resolved to one stable internal class, and the
-requested method satisfies the existing stable class-member proof.
+`worker.execute()` from a stable zero-argument `worker = Worker()` constructor
+assignment whose constructor call is already positively resolved to one stable
+internal class and whose requested method satisfies the existing stable
+class-member proof.
+
+C5J-A3 extends that same proof across zero or more strictly passive intervening
+direct statements. Passive gaps are limited to `pass`, constant expression
+statements, and plain assignments to non-receiver names whose values contain
+only constants, non-receiver loaded names, tuples, or lists of those values.
 
 Explicit module/class attribute calls affected by caller or target mutation,
 decorated or rebound methods, inheritance, class keywords such as metaclasses,
-ambiguity, or other insufficient static evidence remain separate from
-confirmed `CALL` relationships. Local instance calls also remain unconfirmed
-when the narrow constructor proof does not apply, including factory results,
-constructor arguments, receiver parameters such as lexical `self`, intervening
-statements, nested-expression method calls, deeper nested function scopes,
+ambiguity, or other insufficient static evidence remain separate from confirmed
+`CALL` relationships. Local instance calls also remain unconfirmed when the
+narrow constructor proof does not apply, including factory results, constructor
+arguments, receiver parameters such as lexical `self`, receiver rebinding,
+deletion, aliasing, receiver-dependent assignments, intervening calls or
+control flow, nested-expression method calls, deeper nested function scopes,
 explicit `__new__`, `__init__`, or `__getattribute__` bindings, and arbitrary
 receivers whose type cannot be proven.
 
