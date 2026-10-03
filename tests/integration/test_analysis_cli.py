@@ -1188,6 +1188,73 @@ class ProjectSnifferAnalysisCliTests(
             report_text,
         )
 
+    def test_minus_gitignore_includes_gitignored_files_but_preserves_project_sniffer_ignores(
+        self,
+    ) -> None:
+        (self.project / ".gitignore").write_text(
+            "/generated/\n*.tmp\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        generated = self.project / "generated"
+        generated.mkdir()
+
+        (generated / "ignored.txt").write_text(
+            "generated\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        (self.project / "scratch.tmp").write_text(
+            "temporary\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        node_modules = self.project / "node_modules"
+        node_modules.mkdir()
+
+        (node_modules / "package.js").write_text(
+            "generated dependency\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+
+        output_base = self.workspace / "minus-gitignore-output"
+
+        status = main(
+            [
+                "--project",
+                str(self.project),
+                "--architecture",
+                "--report",
+                "--minus-gitignore",
+                "--output",
+                str(output_base),
+            ]
+        )
+
+        self.assertEqual(status, 0)
+
+        report_directory = output_base / "fixture-project"
+
+        architecture_text = (
+            report_directory / "fixture-project-architecture.md"
+        ).read_text(encoding="utf-8")
+
+        report_text = (
+            report_directory / "fixture-project-project-report.md"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn("generated/", architecture_text)
+        self.assertIn("scratch.tmp", architecture_text)
+        self.assertIn("# `generated/ignored.txt`", report_text)
+        self.assertIn("# `scratch.tmp`", report_text)
+
+        self.assertNotIn("node_modules/", architecture_text)
+        self.assertNotIn("# `node_modules/package.js`", report_text)
+
     def test_trace_only_generates_dependency_trace(
         self,
     ) -> None:

@@ -67,6 +67,11 @@ are handled through the packaged `pathspec` dependency.
 
 A `.gitignore` that is itself a symbolic link is not followed.
 
+For canonical analyzer scans, target-project `.gitignore` filtering is enabled
+by default. `--minus-gitignore` disables only that layer for the current run.
+Project Sniffer recommended and personal rules and active output-directory
+exclusion remain active.
+
 ## Deliberate deterministic boundary
 
 Project Sniffer does not currently read machine-specific Git ignore sources:
@@ -131,8 +136,8 @@ docs/private/archive
 continue to apply in their intended project-relative context.
 
 Target-project `.gitignore` matching is deliberately disabled for these scoped
-documentation scans. `.gitignore` remains active for the canonical analyzer
-scan.
+documentation scans. `.gitignore` remains active by default for the canonical
+analyzer scan unless that run explicitly uses `--minus-gitignore`.
 
 If Project Sniffer configuration excludes the `docs/private/` scope itself,
 the CLI requires explicit one-run confirmation before exposing that scope.

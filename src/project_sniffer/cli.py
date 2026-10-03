@@ -28,6 +28,7 @@ Examples:
   sniff --project ./frontend --architecture --output ./analysis
   sniff --project ./frontend --trace
   sniff --project ./frontend --report --trace
+  sniff --project ./frontend --report --minus-gitignore
 
 Still planned for later phases:
   --secret
@@ -158,6 +159,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
 
+    scan_controls = parser.add_argument_group("scan controls")
+
+    scan_controls.add_argument(
+        "--minus-gitignore",
+        action="store_true",
+        help=(
+            "Disable target-project .gitignore filtering "
+            "for canonical analyzer scans."
+        ),
+    )
+
     return parser
 
 
@@ -210,4 +222,5 @@ def main(
         docs_requested=args.docs,
         output_value=args.output,
         working_directory=Path.cwd(),
+        apply_target_gitignore=not args.minus_gitignore,
     )

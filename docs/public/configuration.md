@@ -147,6 +147,11 @@ machines.
 Project Sniffer recommended and personal exclusions remain stronger than
 target `.gitignore` rules.
 
+Canonical analyzer scans apply this target-project `.gitignore` layer by
+default. `--minus-gitignore` disables only that layer for the current analyzer
+run; Project Sniffer recommended, personal, and active output-directory
+exclusions remain active.
+
 ## Effect on `--docs`
 
 `--docs` has its own scoped documentation discovery path.

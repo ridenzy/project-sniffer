@@ -45,6 +45,12 @@ The project is still in pre-1.0 development.
 - Deliberate disabling of target-project `.gitignore` filtering inside explicit
   documentation scopes while preserving Project Sniffer recommended, personal,
   and active output exclusions.
+- Added `--minus-gitignore` as a one-run scan control for canonical analyzer
+  scans. It disables target-project `.gitignore` filtering for
+  `--architecture`, `--report`, and `--trace` while preserving Project Sniffer
+  recommended and personal ignore rules and active output-directory exclusion.
+  `--docs` remains unchanged because documentation-scoped scans already disable
+  target-project `.gitignore` processing.
 - Interactive one-run confirmation before overriding a Project Sniffer
   exclusion of `docs/private/`, with all unrelated ignore rules retained.
 - Stale private-documentation report cleanup when a later private-scope

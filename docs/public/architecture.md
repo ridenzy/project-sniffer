@@ -51,6 +51,12 @@ analysis also share the safe-reader and `SourceEvidence` path. Obsolete parallel
 flat runtime implementations have been removed so `src/project_sniffer/` is the
 single runtime authority.
 
+Canonical analyzer scans apply target-project `.gitignore` processing by
+default. `--minus-gitignore` disables only that target-project layer for the
+current analyzer run while Project Sniffer recommended, personal, and active
+output-directory exclusions remain active. Documentation-scoped scans continue
+to disable target-project `.gitignore` processing independently.
+
 ## Existing behavior to preserve
 
 The package refactor must preserve:

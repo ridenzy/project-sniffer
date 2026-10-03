@@ -20,6 +20,7 @@ sniff --project /path/to/project --report
 sniff --project /path/to/project --trace
 sniff --project /path/to/project --docs
 sniff --project /path/to/project --architecture --report --trace --docs
+sniff --project /path/to/project --report --minus-gitignore
 ```
 
 `--architecture`, `--report`, and `--trace` are analyzers. `--docs` is a
@@ -29,6 +30,15 @@ When `--docs` is selected, Project Sniffer inspects the root-level
 `docs/public/` and `docs/private/` scopes independently and renders readable
 Markdown reports through the existing safe-reader and report-builder
 boundaries.
+
+`--minus-gitignore` is a scan control rather than an analyzer. Canonical
+analyzer scans apply target-project `.gitignore` rules by default. Supplying
+`--minus-gitignore` disables only that target `.gitignore` layer for the
+current run; Project Sniffer recommended and personal ignore rules and active
+output-directory exclusion remain in force.
+
+`--docs` does not need this override because its explicit documentation-scoped
+scans already operate with target-project `.gitignore` processing disabled.
 
 Default output is grouped by scanned project:
 
@@ -78,6 +88,9 @@ The existing implementation can:
 - recursively scan a project through one shared discovery manifest;
 - skip exact-name, basename-glob, and project-relative folder/file rules;
 - apply nested target-project `.gitignore` rules deterministically;
+- optionally disable target-project `.gitignore` filtering for canonical
+  analyzer scans with `--minus-gitignore`, without disabling Project Sniffer
+  recommended, personal, or active output-directory exclusions;
 - exclude the active Project Sniffer output directory from repeat scans;
 - generate a project tree;
 - generate a readable Markdown source report;

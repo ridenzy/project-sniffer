@@ -29,8 +29,10 @@ class ProjectSnifferCliTests(
             "--docs",
             "docs/private",
             "--output",
+            "--minus-gitignore",
             "implemented analyzers",
             "output capabilities",
+            "scan controls",
             (
                 "sniff --project ./frontend "
                 "--architecture"

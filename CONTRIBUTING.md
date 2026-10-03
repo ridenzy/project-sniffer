@@ -150,8 +150,16 @@ If Project Sniffer configuration excludes `docs/private/`, exposing that scope
 must remain an explicit one-run decision. Declining the override must not leave
 a stale canonical private documentation report behind.
 
-Target-project `.gitignore` handling remains part of the canonical analyzer
-scan. It must not silently be reintroduced into documentation-scoped scans
+Target-project `.gitignore` handling is enabled by default for the canonical
+analyzer scan. The installed CLI may disable that target-project layer for one
+run with `--minus-gitignore`; Project Sniffer recommended and personal ignore
+rules and active output-directory exclusion must remain active.
+
+Target-project `.gitignore` processing must not be silently introduced into
+documentation-scoped scans because `--docs` deliberately operates with that
+layer disabled.
+
+It must not silently be reintroduced into documentation-scoped scans
 without deliberately changing the documented `--docs` contract and its tests.
 
 Keep these baseline commands aligned with the packaged runtime as additional

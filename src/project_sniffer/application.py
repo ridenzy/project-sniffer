@@ -180,6 +180,7 @@ def run_analysis(
     docs_requested: bool,
     output_value: str | None,
     working_directory: Path,
+    apply_target_gitignore: bool = True,
 ) -> int:
     """Run the implemented analysis and documentation-output operations."""
 
@@ -286,6 +287,7 @@ def run_analysis(
                 excluded_directories=(
                     output_directory,
                 ),
+                apply_gitignore=apply_target_gitignore,
             )
         except ScanError as error:
             print(
