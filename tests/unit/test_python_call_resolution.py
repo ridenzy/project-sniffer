@@ -2747,6 +2747,23 @@ class PythonCallResolutionTests(
                     "Worker.__bases__ = (Other,)\n"
                 ),
             ),
+            (
+                "mutated_base_bases",
+                (
+                    "class Root:\n"
+                    "    def __getattribute__(self, name):\n"
+                    "        return replacement\n"
+                    "\n"
+                    "class Base:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    pass\n"
+                    "\n"
+                    "Base.__bases__ = (Root,)\n"
+                ),
+            ),
         )
 
         for case_name, prefix in cases:
@@ -2898,6 +2915,24 @@ class PythonCallResolutionTests(
                     "        return True\n"
                     "\n"
                     "Worker.__bases__ = (Other,)\n"
+                ),
+                CallResolutionStatus.POTENTIAL_INTERNAL,
+            ),
+            (
+                "mutated_base_bases",
+                (
+                    "class Root:\n"
+                    "    def __getattribute__(self, name):\n"
+                    "        return replacement\n"
+                    "\n"
+                    "class Base:\n"
+                    "    pass\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "Base.__bases__ = (Root,)\n"
                 ),
                 CallResolutionStatus.POTENTIAL_INTERNAL,
             ),

@@ -1750,6 +1750,15 @@ def _confirmed_same_file_direct_base_target(
     ):
         return None
 
+    if _named_receiver_attribute_mutation_exists(
+        tree=tree,
+        receiver_name=(
+            base_target.qualified_name
+        ),
+        member_name="__bases__",
+    ):
+        return None
+
     return base_target
 
 def _confirmed_same_file_subclass_member_target(
