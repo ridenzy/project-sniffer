@@ -173,6 +173,13 @@ The project is still in pre-1.0 development.
   decorated or rebound base methods, competing child member bindings,
   `__init_subclass__`, `__bases__` mutation, and relevant `__new__`,
   `__init__`, or `__getattribute__` behavior.
+- C5J-B2 allows a stable same-file one-hop subclass that directly owns the
+  requested undecorated method to reuse the existing direct-member proofs.
+  `Worker.execute(...)` resolves to `Worker.execute` with
+  `SAME_FILE_CLASS_ATTRIBUTE_BINDING`, while a supported constructor-backed
+  `worker.execute()` retains `LOCAL_INSTANCE_CONSTRUCTOR_BINDING`.
+- C5J-B2 adds no new proof kind; inheritance safety only establishes when the
+  existing direct subclass-owned member proofs are safe to apply.
 
 ### Changed
 

@@ -332,6 +332,15 @@ before `worker.execute()` may resolve to that same inherited base member.
 Inheritance support therefore extends the existing proof chain rather than
 replacing constructor or binding proof.
 
+C5J-B2 handles the complementary subclass-owned case. When the same narrow,
+stable one-hop inheritance shape is present but `Worker` itself directly owns
+the requested stable undecorated method, the resolver may reuse the existing
+direct-member proofs rather than manufacturing an inherited target.
+`Worker.execute(...)` therefore resolves to `Worker.execute` with
+`SAME_FILE_CLASS_ATTRIBUTE_BINDING`, and a supported constructor-backed
+`worker.execute()` retains `LOCAL_INSTANCE_CONSTRUCTOR_BINDING`. No new proof
+kind is introduced.
+
 Call resolution still distinguishes potential internal, unresolved, ambiguous,
 shadowed, resolved-internal, and dynamic outcomes. Arbitrary instance receivers
 such as `service.execute()` and attribute chains outside the narrow proven

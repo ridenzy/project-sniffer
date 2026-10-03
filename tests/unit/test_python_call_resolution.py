@@ -1262,26 +1262,6 @@ class PythonCallResolutionTests(
                 ),
             ),
             (
-                "inherited_class",
-                (
-                    self.evidence(
-                        "pkg/app.py",
-                        (
-                            "class Base:\n"
-                            "    pass\n"
-                            "\n"
-                            "class Worker(Base):\n"
-                            "    def execute(self):\n"
-                            "        return True\n"
-                            "\n"
-                            "def run():\n"
-                            "    return "
-                            "Worker.execute(None)\n"
-                        ),
-                    ),
-                ),
-            ),
-            (
                 "explicit_metaclass",
                 (
                     self.evidence(
@@ -2014,21 +1994,6 @@ class PythonCallResolutionTests(
                     "    def __getattribute__(self, name):\n"
                     "        return replacement\n"
                     "\n"
-                    "    def execute(self):\n"
-                    "        return True\n"
-                    "\n"
-                    "def run():\n"
-                    "    worker = Worker()\n"
-                    "    return worker.execute()\n"
-                ),
-            ),
-            (
-                "inherited_class",
-                (
-                    "class Base:\n"
-                    "    pass\n"
-                    "\n"
-                    "class Worker(Base):\n"
                     "    def execute(self):\n"
                     "        return True\n"
                     "\n"
@@ -2843,6 +2808,326 @@ class PythonCallResolutionTests(
                 self.assertIsNone(
                     instance_resolution.proof
                 )
+
+    def test_same_file_one_hop_subclass_owned_method_safety_boundaries(
+        self,
+    ) -> None:
+        cases = (
+            (
+                "multiple_inheritance",
+                (
+                    "class Base:\n"
+                    "    pass\n"
+                    "\n"
+                    "class Other:\n"
+                    "    pass\n"
+                    "\n"
+                    "class Worker(Base, Other):\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                ),
+                CallResolutionStatus.POTENTIAL_INTERNAL,
+            ),
+            (
+                "deeper_inheritance",
+                (
+                    "class Root:\n"
+                    "    pass\n"
+                    "\n"
+                    "class Base(Root):\n"
+                    "    pass\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                ),
+                CallResolutionStatus.POTENTIAL_INTERNAL,
+            ),
+            (
+                "decorated_child_member",
+                (
+                    "class Base:\n"
+                    "    pass\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    @staticmethod\n"
+                    "    def execute():\n"
+                    "        return True\n"
+                ),
+                CallResolutionStatus.POTENTIAL_INTERNAL,
+            ),
+            (
+                "child_metaclass",
+                (
+                    "class Meta(type):\n"
+                    "    pass\n"
+                    "\n"
+                    "class Base:\n"
+                    "    pass\n"
+                    "\n"
+                    "class Worker(Base, metaclass=Meta):\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                ),
+                CallResolutionStatus.POTENTIAL_INTERNAL,
+            ),
+            (
+                "base_init_subclass",
+                (
+                    "class Base:\n"
+                    "    def __init_subclass__(cls):\n"
+                    "        cls.execute = replacement\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                ),
+                CallResolutionStatus.POTENTIAL_INTERNAL,
+            ),
+            (
+                "mutated_bases",
+                (
+                    "class Base:\n"
+                    "    pass\n"
+                    "\n"
+                    "class Other:\n"
+                    "    pass\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "Worker.__bases__ = (Other,)\n"
+                ),
+                CallResolutionStatus.POTENTIAL_INTERNAL,
+            ),
+            (
+                "reassigned_child_member",
+                (
+                    "class Base:\n"
+                    "    pass\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "Worker.execute = replacement\n"
+                ),
+                CallResolutionStatus.POTENTIAL_INTERNAL,
+            ),
+            (
+                "child_custom_init",
+                (
+                    "class Base:\n"
+                    "    pass\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    def __init__(self):\n"
+                    "        pass\n"
+                    "\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                ),
+                CallResolutionStatus.RESOLVED_INTERNAL,
+            ),
+            (
+                "base_custom_getattribute",
+                (
+                    "class Base:\n"
+                    "    def __getattribute__(self, name):\n"
+                    "        return replacement\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                ),
+                CallResolutionStatus.RESOLVED_INTERNAL,
+            ),
+        )
+
+        for (
+            case_name,
+            prefix,
+            expected_class_status,
+        ) in cases:
+            with self.subTest(
+                case=case_name
+            ):
+                source = (
+                    prefix
+                    + "\n"
+                    + "def class_call():\n"
+                    + "    return Worker.execute(None)\n"
+                    + "\n"
+                    + "def instance_call():\n"
+                    + "    worker = Worker()\n"
+                    + "    return worker.execute()\n"
+                )
+
+                resolutions = self.resolve(
+                    self.evidence(
+                        "pkg/app.py",
+                        source,
+                    ),
+                )
+
+                class_resolution = next(
+                    item
+                    for item in resolutions
+                    if item.evidence.target_parts
+                    == (
+                        "Worker",
+                        "execute",
+                    )
+                )
+
+                instance_resolution = next(
+                    item
+                    for item in resolutions
+                    if item.evidence.target_parts
+                    == (
+                        "worker",
+                        "execute",
+                    )
+                )
+
+                self.assertIs(
+                    class_resolution.status,
+                    expected_class_status,
+                )
+
+                if (
+                    expected_class_status
+                    is CallResolutionStatus.RESOLVED_INTERNAL
+                ):
+                    self.assertIs(
+                        class_resolution.proof,
+                        (
+                            CallResolutionProof
+                            .SAME_FILE_CLASS_ATTRIBUTE_BINDING
+                        ),
+                    )
+
+                    self.assertIsNotNone(
+                        class_resolution.resolved_target
+                    )
+
+                    self.assertEqual(
+                        class_resolution.resolved_target.qualified_name,
+                        "Worker.execute",
+                    )
+
+                else:
+                    self.assertIsNone(
+                        class_resolution.proof
+                    )
+
+                    self.assertIsNone(
+                        class_resolution.resolved_target
+                    )
+
+                self.assertIs(
+                    instance_resolution.status,
+                    CallResolutionStatus.UNRESOLVED,
+                )
+
+                self.assertIsNone(
+                    instance_resolution.proof
+                )
+
+                self.assertIsNone(
+                    instance_resolution.resolved_target
+                )
+
+    def test_same_file_one_hop_subclass_owned_method_calls_are_resolved_internal(
+        self,
+    ) -> None:
+        resolutions = self.resolve(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Base:\n"
+                    "    pass\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def class_call():\n"
+                    "    return Worker.execute(None)\n"
+                    "\n"
+                    "def instance_call():\n"
+                    "    worker = Worker()\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+        )
+
+        class_resolution = next(
+            item
+            for item in resolutions
+            if item.evidence.target_parts
+            == (
+                "Worker",
+                "execute",
+            )
+        )
+
+        instance_resolution = next(
+            item
+            for item in resolutions
+            if item.evidence.target_parts
+            == (
+                "worker",
+                "execute",
+            )
+        )
+
+        for resolution in (
+            class_resolution,
+            instance_resolution,
+        ):
+            self.assertIs(
+                resolution.status,
+                CallResolutionStatus.RESOLVED_INTERNAL,
+            )
+
+            self.assertIsNotNone(
+                resolution.resolved_target
+            )
+
+            self.assertEqual(
+                resolution.resolved_target.source_path,
+                "pkg/app.py",
+            )
+
+            self.assertEqual(
+                resolution.resolved_target.qualified_name,
+                "Worker.execute",
+            )
+
+            self.assertEqual(
+                resolution.candidate_targets,
+                (
+                    resolution.resolved_target,
+                ),
+            )
+
+        self.assertIs(
+            class_resolution.proof,
+            (
+                CallResolutionProof
+                .SAME_FILE_CLASS_ATTRIBUTE_BINDING
+            ),
+        )
+
+        self.assertIs(
+            instance_resolution.proof,
+            (
+                CallResolutionProof
+                .LOCAL_INSTANCE_CONSTRUCTOR_BINDING
+            ),
+        )
 
 if __name__ == "__main__":
     unittest.main()

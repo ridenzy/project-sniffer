@@ -223,6 +223,11 @@ The existing implementation can:
   `LOCAL_INSTANCE_INHERITED_METHOD_BINDING` provenance when the existing
   constructor/passive-gap requirements and the additional inheritance safety
   checks all succeed;
+- allow that same narrow one-hop subclass shape to use its own stable direct
+  method when the child itself declares the requested member: supported
+  `Worker.execute(...)` calls resolve to `Worker.execute` with
+  `SAME_FILE_CLASS_ATTRIBUTE_BINDING`, while supported constructor-backed
+  `worker.execute()` calls retain `LOCAL_INSTANCE_CONSTRUCTOR_BINDING`;
 - reject local instance proof for receiver rebinding, deletion, aliasing,
   receiver-dependent assignments, intervening calls or control flow, factory
   results, constructor arguments, nested-expression method calls, receiver

@@ -1514,7 +1514,7 @@ def _named_receiver_attribute_mutation_exists(
     return False
 
 
-def _confirmed_class_member_target(
+def _confirmed_direct_class_member_definition_target(
     *,
     tree: ast.Module | None,
     class_target: CallTarget,
@@ -1533,12 +1533,6 @@ def _confirmed_class_member_target(
     if class_node is None:
         return None
 
-    if (
-        class_node.bases
-        or class_node.keywords
-    ):
-        return None
-
     member_name = (
         member_target
         .qualified_name
@@ -1554,7 +1548,9 @@ def _confirmed_class_member_target(
     )
 
     if (
-        member_target.qualified_name
+        member_target.source_path
+        != class_target.source_path
+        or member_target.qualified_name
         != expected_qualified_name
         or member_target.kind
         not in {
@@ -1617,6 +1613,38 @@ def _confirmed_class_member_target(
         return None
 
     return member_target
+
+
+def _confirmed_class_member_target(
+    *,
+    tree: ast.Module | None,
+    class_target: CallTarget,
+    member_target: CallTarget,
+) -> CallTarget | None:
+    if tree is None:
+        return None
+
+    class_node = (
+        _find_direct_class_definition(
+            tree=tree,
+            target=class_target,
+        )
+    )
+
+    if (
+        class_node is None
+        or class_node.bases
+        or class_node.keywords
+    ):
+        return None
+
+    return (
+        _confirmed_direct_class_member_definition_target(
+            tree=tree,
+            class_target=class_target,
+            member_target=member_target,
+        )
+    )
 
 def _confirmed_same_file_direct_base_target(
     *,
@@ -1724,6 +1752,47 @@ def _confirmed_same_file_direct_base_target(
 
     return base_target
 
+def _confirmed_same_file_subclass_member_target(
+    *,
+    tree: ast.Module | None,
+    class_target: CallTarget,
+    member_target: CallTarget,
+    top_level_symbols: dict[
+        tuple[str, str],
+        tuple[CallTarget, ...],
+    ],
+) -> tuple[
+    CallTarget,
+    CallTarget,
+] | None:
+    base_target = (
+        _confirmed_same_file_direct_base_target(
+            tree=tree,
+            class_target=class_target,
+            top_level_symbols=(
+                top_level_symbols
+            ),
+        )
+    )
+
+    if base_target is None:
+        return None
+
+    confirmed_member = (
+        _confirmed_direct_class_member_definition_target(
+            tree=tree,
+            class_target=class_target,
+            member_target=member_target,
+        )
+    )
+
+    if confirmed_member is None:
+        return None
+
+    return (
+        base_target,
+        confirmed_member,
+    )
 
 def _confirmed_same_file_inherited_member_target(
     *,
@@ -2524,6 +2593,40 @@ def _resolve_class_attribute_call(
             ordered_member_candidates[0]
         )
 
+        confirmed_member_target = (
+            _confirmed_class_member_target(
+                tree=target_tree,
+                class_target=class_target,
+                member_target=member_target,
+            )
+        )
+
+        if (
+            confirmed_member_target is None
+            and class_proof
+            is (
+                CallResolutionProof
+                .SAME_FILE_STABLE_BINDING
+            )
+            and class_target.source_path
+            == source_path
+        ):
+            subclass_member = (
+                _confirmed_same_file_subclass_member_target(
+                    tree=target_tree,
+                    class_target=class_target,
+                    member_target=member_target,
+                    top_level_symbols=(
+                        top_level_symbols
+                    ),
+                )
+            )
+
+            if subclass_member is not None:
+                _, confirmed_member_target = (
+                    subclass_member
+                )
+
         if (
             stable_class_target
             is not None
@@ -2534,11 +2637,7 @@ def _resolve_class_attribute_call(
                 f"{class_target.qualified_name}"
                 f".{member_name}"
             )
-            and _confirmed_class_member_target(
-                tree=target_tree,
-                class_target=class_target,
-                member_target=member_target,
-            )
+            and confirmed_member_target
             is not None
         ):
             resolved_target = (
@@ -3259,6 +3358,64 @@ def _resolve_local_instance_attribute_call(
 
     if class_target.source_path != source_path:
         return None
+
+    subclass_member_candidates = (
+        _ordered_unique_targets(
+            qualified_symbols.get(
+                (
+                    class_target.source_path,
+                    (
+                        f"{class_target.qualified_name}"
+                        f".{member_name}"
+                    ),
+                ),
+                (),
+            )
+        )
+    )
+
+    if len(subclass_member_candidates) == 1:
+        subclass_member = (
+            _confirmed_same_file_subclass_member_target(
+                tree=target_tree,
+                class_target=class_target,
+                member_target=(
+                    subclass_member_candidates[0]
+                ),
+                top_level_symbols=(
+                    top_level_symbols
+                ),
+            )
+        )
+
+        if subclass_member is not None:
+            base_target, member_target = (
+                subclass_member
+            )
+
+            if not _classes_allow_inherited_instance_method_proof(
+                tree=target_tree,
+                class_target=class_target,
+                base_target=base_target,
+            ):
+                return None
+
+            return CallResolution(
+                source_path=source_path,
+                evidence=evidence,
+                status=(
+                    CallResolutionStatus
+                    .RESOLVED_INTERNAL
+                ),
+                candidate_targets=(
+                    member_target,
+                ),
+                resolved_target=member_target,
+                proof=(
+                    CallResolutionProof
+                    .LOCAL_INSTANCE_CONSTRUCTOR_BINDING
+                ),
+            )
 
     inherited_target = (
         _confirmed_same_file_inherited_member_target(

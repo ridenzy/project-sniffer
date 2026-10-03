@@ -59,6 +59,13 @@ narrow same-file, one-hop inheritance shape.
 proof to an existing A1/A2/A3 constructor-backed local instance such as
 `worker.execute()`.
 
+C5J-B2 covers the complementary case where that supported one-hop subclass
+directly owns the requested method. The resolved target remains the subclass
+member, such as `Worker.execute`, and the resolver reuses
+`SAME_FILE_CLASS_ATTRIBUTE_BINDING` for the class call and
+`LOCAL_INSTANCE_CONSTRUCTOR_BINDING` for the supported constructor-backed
+instance call. The positive-proof count therefore remains eight.
+
 Explicit module/class attribute calls affected by caller or target mutation,
 decorated or rebound methods, unsupported inheritance shapes, class keywords
 such as metaclasses, ambiguity, or other insufficient static evidence remain
