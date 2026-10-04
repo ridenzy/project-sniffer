@@ -180,6 +180,19 @@ The project is still in pre-1.0 development.
   `worker.execute()` retains `LOCAL_INSTANCE_CONSTRUCTOR_BINDING`.
 - C5J-B2 adds no new proof kind; inheritance safety only establishes when the
   existing direct subclass-owned member proofs are safe to apply.
+- C5J-B3B extends inherited direct-method resolution to one stable internal
+  `from ... import ...` base, including imported aliases, while retaining the
+  existing same-file one-hop path and common direct-base safety checks.
+- Supported imported-base `Worker.execute(...)` calls resolve across files to
+  the declaring base member with
+  `INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` provenance. Supported
+  constructor-backed `worker.execute()` calls continue to use
+  `LOCAL_INSTANCE_INHERITED_METHOD_BINDING`.
+- Imported-base inheritance remains conservative around late or reassigned
+  import bindings, multiple or deeper inheritance, module-expression bases,
+  class keywords and metaclasses, decorated or rebound base members, competing
+  child bindings, `__init_subclass__`, `__bases__` or member mutation, and
+  relevant `__new__`, `__init__`, or `__getattribute__` behavior.
 
 ### Changed
 

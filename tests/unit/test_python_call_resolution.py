@@ -2648,6 +2648,438 @@ class PythonCallResolutionTests(
         )
 
 
+    def test_imported_one_hop_inheritance_resolution_and_safety_boundaries(
+        self,
+    ) -> None:
+        def source(*lines: str) -> str:
+            return "\n".join(lines) + "\n"
+
+        tail = source(
+            "",
+            "def class_call():",
+            "    return Worker.execute(None)",
+            "",
+            "def instance_call():",
+            "    worker = Worker()",
+            "    return worker.execute()",
+        )
+        base_ok = source(
+            "class Base:",
+            "    def execute(self):",
+            "        return True",
+        )
+        cases = (
+            (
+                "direct_imported_base",
+                source(
+                    "from .base import Base",
+                    "",
+                    "class Worker(Base):",
+                    "    pass",
+                ),
+                base_ok,
+                True,
+                True,
+            ),
+            (
+                "aliased_imported_base",
+                source(
+                    "from .base import Base as B",
+                    "",
+                    "class Worker(B):",
+                    "    pass",
+                ),
+                base_ok,
+                True,
+                True,
+            ),
+            (
+                "import_after_class",
+                source(
+                    "class Worker(Base):",
+                    "    pass",
+                    "",
+                    "from .base import Base",
+                ),
+                base_ok,
+                False,
+                False,
+            ),
+            (
+                "reassigned_import_binding",
+                source(
+                    "from .base import Base",
+                    "Base = replacement",
+                    "",
+                    "class Worker(Base):",
+                    "    pass",
+                ),
+                base_ok,
+                False,
+                False,
+            ),
+            (
+                "multiple_inheritance",
+                source(
+                    "from .base import Base",
+                    "",
+                    "class Other:",
+                    "    pass",
+                    "",
+                    "class Worker(Base, Other):",
+                    "    pass",
+                ),
+                base_ok,
+                False,
+                False,
+            ),
+            (
+                "module_expression_base",
+                source(
+                    "from . import base",
+                    "",
+                    "class Worker(base.Base):",
+                    "    pass",
+                ),
+                base_ok,
+                False,
+                False,
+            ),
+            (
+                "deeper_imported_base",
+                source(
+                    "from .base import Base",
+                    "",
+                    "class Worker(Base):",
+                    "    pass",
+                ),
+                source(
+                    "class Root:",
+                    "    def execute(self):",
+                    "        return True",
+                    "",
+                    "class Base(Root):",
+                    "    pass",
+                ),
+                False,
+                False,
+            ),
+            (
+                "decorated_base_member",
+                source(
+                    "from .base import Base",
+                    "",
+                    "class Worker(Base):",
+                    "    pass",
+                ),
+                source(
+                    "class Base:",
+                    "    @staticmethod",
+                    "    def execute():",
+                    "        return True",
+                ),
+                False,
+                False,
+            ),
+            (
+                "base_metaclass",
+                source(
+                    "from .base import Base",
+                    "",
+                    "class Worker(Base):",
+                    "    pass",
+                ),
+                source(
+                    "class Meta(type):",
+                    "    pass",
+                    "",
+                    "class Base(metaclass=Meta):",
+                    "    def execute(self):",
+                    "        return True",
+                ),
+                False,
+                False,
+            ),
+            (
+                "child_metaclass",
+                source(
+                    "from .base import Base",
+                    "",
+                    "class Meta(type):",
+                    "    pass",
+                    "",
+                    "class Worker(Base, metaclass=Meta):",
+                    "    pass",
+                ),
+                base_ok,
+                False,
+                False,
+            ),
+            (
+                "child_member_binding",
+                source(
+                    "from .base import Base",
+                    "",
+                    "class Worker(Base):",
+                    "    execute = replacement",
+                ),
+                base_ok,
+                False,
+                False,
+            ),
+            (
+                "child_bases_mutation",
+                source(
+                    "from .base import Base",
+                    "",
+                    "class Other:",
+                    "    pass",
+                    "",
+                    "class Worker(Base):",
+                    "    pass",
+                    "",
+                    "Worker.__bases__ = (Other,)",
+                ),
+                base_ok,
+                False,
+                False,
+            ),
+            (
+                "imported_alias_bases_mutation",
+                source(
+                    "from .base import Base as B",
+                    "",
+                    "class Other:",
+                    "    pass",
+                    "",
+                    "class Worker(B):",
+                    "    pass",
+                    "",
+                    "B.__bases__ = (Other,)",
+                ),
+                base_ok,
+                False,
+                False,
+            ),
+            (
+                "source_base_bases_mutation",
+                source(
+                    "from .base import Base",
+                    "",
+                    "class Worker(Base):",
+                    "    pass",
+                ),
+                source(
+                    "class Other:",
+                    "    pass",
+                    "",
+                    "class Base:",
+                    "    def execute(self):",
+                    "        return True",
+                    "",
+                    "Base.__bases__ = (Other,)",
+                ),
+                False,
+                False,
+            ),
+            (
+                "imported_alias_member_mutation",
+                source(
+                    "from .base import Base as B",
+                    "",
+                    "class Worker(B):",
+                    "    pass",
+                    "",
+                    "B.execute = replacement",
+                ),
+                base_ok,
+                False,
+                False,
+            ),
+            (
+                "source_base_member_mutation",
+                source(
+                    "from .base import Base",
+                    "",
+                    "class Worker(Base):",
+                    "    pass",
+                ),
+                source(
+                    "class Base:",
+                    "    def execute(self):",
+                    "        return True",
+                    "",
+                    "Base.execute = replacement",
+                ),
+                False,
+                False,
+            ),
+            (
+                "base_init_subclass",
+                source(
+                    "from .base import Base",
+                    "",
+                    "class Worker(Base):",
+                    "    pass",
+                ),
+                source(
+                    "class Base:",
+                    "    def __init_subclass__(cls):",
+                    "        cls.execute = replacement",
+                    "",
+                    "    def execute(self):",
+                    "        return True",
+                ),
+                False,
+                False,
+            ),
+            (
+                "child_custom_init",
+                source(
+                    "from .base import Base",
+                    "",
+                    "class Worker(Base):",
+                    "    def __init__(self):",
+                    "        pass",
+                ),
+                base_ok,
+                True,
+                False,
+            ),
+            (
+                "base_custom_getattribute",
+                source(
+                    "from .base import Base",
+                    "",
+                    "class Worker(Base):",
+                    "    pass",
+                ),
+                source(
+                    "class Base:",
+                    "    def __getattribute__(self, name):",
+                    "        return replacement",
+                    "",
+                    "    def execute(self):",
+                    "        return True",
+                ),
+                True,
+                False,
+            ),
+            (
+                "imported_alias_getattribute_mutation",
+                source(
+                    "from .base import Base as B",
+                    "",
+                    "class Worker(B):",
+                    "    pass",
+                    "",
+                    "B.__getattribute__ = replacement",
+                ),
+                base_ok,
+                True,
+                False,
+            ),
+        )
+
+        for (
+            case_name,
+            app_prefix,
+            base_source,
+            class_expected,
+            instance_expected,
+        ) in cases:
+            with self.subTest(case=case_name):
+                resolutions = self.resolve(
+                    self.evidence(
+                        "pkg/app.py",
+                        app_prefix + tail,
+                    ),
+                    self.evidence(
+                        "pkg/base.py",
+                        base_source,
+                    ),
+                )
+                class_resolution = next(
+                    item
+                    for item in resolutions
+                    if item.evidence.target_parts
+                    == ("Worker", "execute")
+                )
+                instance_resolution = next(
+                    item
+                    for item in resolutions
+                    if item.evidence.target_parts
+                    == ("worker", "execute")
+                )
+
+                for (
+                    label,
+                    resolution,
+                    expected_resolved,
+                    expected_proof,
+                ) in (
+                    (
+                        "class",
+                        class_resolution,
+                        class_expected,
+                        (
+                            CallResolutionProof
+                            .INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING
+                        ),
+                    ),
+                    (
+                        "instance",
+                        instance_resolution,
+                        instance_expected,
+                        (
+                            CallResolutionProof
+                            .LOCAL_INSTANCE_INHERITED_METHOD_BINDING
+                        ),
+                    ),
+                ):
+                    with self.subTest(
+                        case=case_name,
+                        receiver=label,
+                    ):
+                        if expected_resolved:
+                            self.assertIs(
+                                resolution.status,
+                                CallResolutionStatus.RESOLVED_INTERNAL,
+                            )
+                            self.assertIs(
+                                resolution.proof,
+                                expected_proof,
+                            )
+                            self.assertIsNotNone(
+                                resolution.resolved_target
+                            )
+                            self.assertEqual(
+                                resolution.resolved_target.source_path,
+                                "pkg/base.py",
+                            )
+                            self.assertEqual(
+                                resolution.resolved_target.qualified_name,
+                                "Base.execute",
+                            )
+                            self.assertEqual(
+                                resolution.candidate_targets,
+                                (
+                                    resolution.resolved_target,
+                                ),
+                            )
+                        else:
+                            self.assertIs(
+                                resolution.status,
+                                CallResolutionStatus.UNRESOLVED,
+                            )
+                            self.assertIsNone(
+                                resolution.proof
+                            )
+                            self.assertIsNone(
+                                resolution.resolved_target
+                            )
+
+
     def test_unsupported_inheritance_shapes_remain_unconfirmed(
         self,
     ) -> None:

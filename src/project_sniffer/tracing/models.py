@@ -65,6 +65,10 @@ class CallResolutionProof(
         "same_file_inherited_class_attribute_binding"
     )
 
+    INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING = (
+        "internal_imported_inherited_class_attribute_binding"
+    )
+
     LOCAL_INSTANCE_INHERITED_METHOD_BINDING = (
         "local_instance_inherited_method_binding"
     )

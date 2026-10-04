@@ -210,22 +210,27 @@ The existing implementation can:
   statements;
 - retain `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` provenance on those confirmed
   local instance-method relationships;
-- positively confirm a conservative one-hop same-file inheritance shape such
-  as `class Worker(Base): ...` when `Worker` has exactly one plain-name direct
-  base, both classes are stable direct top-level bindings in the same source
-  file, the child has no competing binding for the requested member, and the
-  member is one stable direct undecorated method declared on `Base`;
-- resolve supported inherited `Worker.execute(...)` calls to the actual
-  declaring symbol `Base.execute` with
-  `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` provenance;
+- positively confirm a conservative one-hop inherited-member shape such as
+  `class Worker(Base): ...` when `Worker` has exactly one plain-name direct
+  base and no class keywords, and that base is either one stable same-file
+  top-level class or one stable directly imported internal class reached
+  through a resolved `from ... import ...` binding, including an imported
+  alias; the base itself must have no further base or class keywords, the child
+  must have no competing binding for the requested member, and the member must
+  be one stable direct undecorated method declared on the base;
+- resolve supported same-file inherited `Worker.execute(...)` calls to the
+  actual declaring symbol `Base.execute` with
+  `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` provenance, and supported
+  imported-base class calls with
+  `INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` provenance;
 - extend the existing constructor-backed local-instance path so a proven
-  `worker = Worker()` may resolve `worker.execute()` to `Base.execute` with
-  `LOCAL_INSTANCE_INHERITED_METHOD_BINDING` provenance when the existing
-  constructor/passive-gap requirements and the additional inheritance safety
-  checks all succeed;
-- allow that same narrow one-hop subclass shape to use its own stable direct
-  method when the child itself declares the requested member: supported
-  `Worker.execute(...)` calls resolve to `Worker.execute` with
+  `worker = Worker()` may resolve `worker.execute()` to the declaring inherited
+  base member with `LOCAL_INSTANCE_INHERITED_METHOD_BINDING` provenance for
+  either supported same-file or imported direct bases, while preserving the
+  existing constructor/passive-gap and inheritance safety requirements;
+- keep the B2 subclass-owned reuse path limited to the supported same-file
+  one-hop shape: when the child itself declares the requested member,
+  `Worker.execute(...)` resolves to `Worker.execute` with
   `SAME_FILE_CLASS_ATTRIBUTE_BINDING`, while supported constructor-backed
   `worker.execute()` calls retain `LOCAL_INSTANCE_CONSTRUCTOR_BINDING`;
 - reject local instance proof for receiver rebinding, deletion, aliasing,
