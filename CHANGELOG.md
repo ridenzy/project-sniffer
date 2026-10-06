@@ -189,10 +189,20 @@ The project is still in pre-1.0 development.
   constructor-backed `worker.execute()` calls continue to use
   `LOCAL_INSTANCE_INHERITED_METHOD_BINDING`.
 - Imported-base inheritance remains conservative around late or reassigned
-  import bindings, multiple or deeper inheritance, module-expression bases,
-  class keywords and metaclasses, decorated or rebound base members, competing
-  child bindings, `__init_subclass__`, `__bases__` or member mutation, and
-  relevant `__new__`, `__init__`, or `__getattribute__` behavior.
+  import bindings, multiple inheritance, module-expression bases, class
+  keywords and metaclasses, decorated or rebound base members, competing child
+  bindings, `__init_subclass__`, `__bases__` or member mutation, and relevant
+  `__new__`, `__init__`, or `__getattribute__` behavior.
+- C5J-B4A extends inherited-member resolution across stable linear single-base
+  ancestry chains by repeatedly reusing the same-file and imported direct-base
+  proofs at each hop.
+- Supported deeper inherited class and constructor-backed instance calls resolve
+  to the first stable direct undecorated declaring ancestor member while
+  retaining the existing inheritance proof kinds and per-hop mutation and
+  binding guards.
+- C5J-B4A does not broaden the B2 subclass-owned direct-member path beyond its
+  same-file one-hop shape and does not add multiple-inheritance/C3 MRO,
+  `super()`, descriptor, or decorated-member semantics.
 
 ### Changed
 

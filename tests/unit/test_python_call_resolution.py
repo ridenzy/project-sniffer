@@ -2648,7 +2648,7 @@ class PythonCallResolutionTests(
         )
 
 
-    def test_imported_one_hop_inheritance_resolution_and_safety_boundaries(
+    def test_imported_inheritance_resolution_and_safety_boundaries(
         self,
     ) -> None:
         def source(*lines: str) -> str:
@@ -2761,8 +2761,8 @@ class PythonCallResolutionTests(
                     "class Base(Root):",
                     "    pass",
                 ),
-                False,
-                False,
+                True,
+                True,
             ),
             (
                 "decorated_base_member",
@@ -3011,6 +3011,11 @@ class PythonCallResolutionTests(
                     if item.evidence.target_parts
                     == ("worker", "execute")
                 )
+                expected_qualified_name = (
+                    "Root.execute"
+                    if case_name == "deeper_imported_base"
+                    else "Base.execute"
+                )
 
                 for (
                     label,
@@ -3059,7 +3064,7 @@ class PythonCallResolutionTests(
                             )
                             self.assertEqual(
                                 resolution.resolved_target.qualified_name,
-                                "Base.execute",
+                                expected_qualified_name,
                             )
                             self.assertEqual(
                                 resolution.candidate_targets,
@@ -3080,7 +3085,7 @@ class PythonCallResolutionTests(
                             )
 
 
-    def test_unsupported_inheritance_shapes_remain_unconfirmed(
+    def test_inheritance_shape_resolution_and_safety_boundaries(
         self,
     ) -> None:
         cases = (
@@ -3240,22 +3245,75 @@ class PythonCallResolutionTests(
                     )
                 )
 
+                if case_name == "deeper_inheritance":
+                    self.assertIs(
+                        class_resolution.status,
+                        CallResolutionStatus.RESOLVED_INTERNAL,
+                    )
+                    self.assertIs(
+                        class_resolution.proof,
+                        CallResolutionProof.SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING,
+                    )
+                    self.assertIsNotNone(
+                        class_resolution.resolved_target
+                    )
+                    self.assertEqual(
+                        class_resolution.resolved_target.source_path,
+                        "pkg/app.py",
+                    )
+                    self.assertEqual(
+                        class_resolution.resolved_target.qualified_name,
+                        "Root.execute",
+                    )
+                    self.assertEqual(
+                        class_resolution.candidate_targets,
+                        (class_resolution.resolved_target,),
+                    )
+
+                    self.assertIs(
+                        instance_resolution.status,
+                        CallResolutionStatus.RESOLVED_INTERNAL,
+                    )
+                    self.assertIs(
+                        instance_resolution.proof,
+                        CallResolutionProof.LOCAL_INSTANCE_INHERITED_METHOD_BINDING,
+                    )
+                    self.assertIsNotNone(
+                        instance_resolution.resolved_target
+                    )
+                    self.assertEqual(
+                        instance_resolution.resolved_target.source_path,
+                        "pkg/app.py",
+                    )
+                    self.assertEqual(
+                        instance_resolution.resolved_target.qualified_name,
+                        "Root.execute",
+                    )
+                    self.assertEqual(
+                        instance_resolution.candidate_targets,
+                        (instance_resolution.resolved_target,),
+                    )
+                    continue
+
                 self.assertIs(
                     class_resolution.status,
                     CallResolutionStatus.UNRESOLVED,
                 )
-
                 self.assertIs(
                     instance_resolution.status,
                     CallResolutionStatus.UNRESOLVED,
                 )
-
                 self.assertIsNone(
                     class_resolution.proof
                 )
-
+                self.assertIsNone(
+                    class_resolution.resolved_target
+                )
                 self.assertIsNone(
                     instance_resolution.proof
+                )
+                self.assertIsNone(
+                    instance_resolution.resolved_target
                 )
 
     def test_same_file_one_hop_subclass_owned_method_safety_boundaries(

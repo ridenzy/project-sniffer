@@ -51,16 +51,15 @@ direct statements. Passive gaps are limited to `pass`, constant expression
 statements, and plain assignments to non-receiver names whose values contain
 only constants, non-receiver loaded names, tuples, or lists of those values.
 
-C5J-B1 and C5J-B3B together provide three inheritance-specific positive
-proofs for deliberately narrow one-hop inheritance shapes.
-`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` resolves a supported same-file
-`Worker.execute(...)` call to the stable declaring method `Base.execute`.
-`INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` provides the
-corresponding class-call proof when the single plain-name direct base is one
-stable resolved internal `from ... import ...` binding, including an imported
-alias. `LOCAL_INSTANCE_INHERITED_METHOD_BINDING` applies inherited-member proof
-to an existing A1/A2/A3 constructor-backed local instance such as
-`worker.execute()` for either supported base provenance.
+C5J-B1, C5J-B3B, and C5J-B4A together reuse three inheritance-specific
+positive proofs. B4A extends inherited-member lookup across a stable linear
+single-base ancestry whose hops are proven through the existing same-file or
+directly imported internal plain-name base paths.
+`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` and
+`INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` resolve a supported class
+call to the first stable direct undecorated ancestor that actually declares the
+member, while `LOCAL_INSTANCE_INHERITED_METHOD_BINDING` applies the same lookup
+to an existing A1/A2/A3 constructor-backed local instance.
 
 C5J-B2 covers the complementary same-file case where that supported one-hop
 subclass directly owns the requested method. The resolved target remains the
@@ -73,11 +72,12 @@ now nine because B3B adds the imported inherited class-attribute proof.
 Explicit module/class attribute calls affected by caller or target mutation,
 decorated or rebound methods, unsupported inheritance shapes, class keywords
 such as metaclasses, ambiguity, or other insufficient static evidence remain
-separate from confirmed `CALL` relationships. The current inheritance proof
-supports only one hop through one plain-name direct base. That base may be one
-stable same-file direct class or one stable directly imported internal class;
-multiple or deeper inheritance, module-expression bases, unstable imports, and
-other unsupported shapes remain unconfirmed.
+separate from confirmed `CALL` relationships. The current inherited-member
+proof supports stable linear ancestry only: every hop must use one plain-name
+base proven as a stable same-file or directly imported internal class. Multiple
+inheritance/C3 MRO, module-expression bases, unstable imports, descriptors, and
+other unsupported shapes remain unconfirmed. The B2 subclass-owned
+direct-member path remains limited to its same-file one-hop shape.
 
 Local instance calls also remain unconfirmed when the
 narrow constructor proof does not apply, including factory results, constructor
@@ -237,15 +237,15 @@ conservative direct-name call candidates, compiler-assisted shadowing evidence,
 AST-assisted binding checks, structured dynamic-call classification, and
 positively proven internal calls. Confirmed calls may currently be proven
 through stable direct-name bindings, the conservative C5I module/class attribute
-proofs, the C5J constructor-backed local-instance proof family, or the narrow
-C5J-B1/B3B one-hop inherited-member proof paths for stable same-file and
-directly imported internal plain-name bases.
+proofs, the C5J constructor-backed local-instance proof family, or the
+C5J-B1/B3B/B4A inherited-member paths for stable linear single-base ancestry
+whose hops use same-file or directly imported internal plain-name bases.
 
-Broader instance propagation, factory return-type inference, inheritance and
-MRO resolution, `super()` semantics, decorated method semantics,
-`staticmethod` and `classmethod` behavior, deeper attribute chains, routes,
-APIs, file operations, exports, database usage, and additional parser languages
-remain later stages.
+Broader instance propagation, factory return-type inference, multiple
+inheritance/C3 MRO resolution, `super()` semantics, decorated/descriptor method
+semantics, `staticmethod` and `classmethod` behavior, deeper attribute chains,
+routes, APIs, file operations, exports, database usage, and additional parser
+languages remain later stages.
 
 ## Future detection layers
 

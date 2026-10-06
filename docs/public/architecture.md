@@ -279,11 +279,11 @@ own positive static proof succeeds.
 `SemanticProjectIndex` together with the existing Python import resolutions.
 
 `project_sniffer.tracing.python.inheritance` provides the deliberately narrow
-structural inheritance primitive used by the call resolver. It recognizes only
-one direct plain-name base from an already-read Python `ClassDef`; it does not
-perform independent symbol resolution, MRO computation, or binding-stability
-proof. Those responsibilities remain in
-`project_sniffer.tracing.python.calls`.
+structural inheritance primitive used by the call resolver. It recognizes one
+direct plain-name base from an already-read Python `ClassDef` at a time; it does
+not perform independent symbol resolution, MRO computation, or binding-stability
+proof. `project_sniffer.tracing.python.calls` owns those responsibilities and
+may compose the direct-base primitive across a confirmed linear ancestry.
 
 The current resolver handles direct-name calls conservatively and also supports
 a narrow two-part attribute-call subset. Direct-name candidates can come from
@@ -328,21 +328,29 @@ the existing stable direct-method proof.
 C5J-B3B extends that inherited-member path without adding a parallel
 inheritance resolver. The child still requires exactly one plain-name direct
 base and no class keywords, but that base may now be one stable directly
-imported internal class reached through one proven `from ... import ...`
-binding, including an imported alias. The import must be available when the
-child class is defined and remain stable, while the imported base must remain a
-stable direct top-level class with no further base or class keywords. The same
-direct-base shape and mutation guards are reused across the child and base
-source trees.
+imported internal class reached through one proven `from ... import ...` binding,
+including an imported alias. The import must be available when the child class
+is defined and remain stable. The same direct-base shape and mutation guards are
+reused across the child and base source trees.
 
-For class-receiver calls, supported same-file inheritance retains
-`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING`, while supported imported-base
-inheritance uses `INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING`. Both
-resolve to the actual declaring member such as `Base.execute`. For local
-constructor-backed instance calls, the existing A1/A2/A3 constructor
-provenance is still required and
-`LOCAL_INSTANCE_INHERITED_METHOD_BINDING` applies to either supported base
-provenance, including a declaring member in another source file.
+C5J-B4A composes those direct-base proofs across a stable linear ancestry. At
+every hop the current class must have either no base or exactly one plain-name
+base with no class keywords, and that base must resolve as one stable same-file
+or directly imported internal top-level class. Cycles, unstable hops, competing
+member bindings, and recognized base/member mutation stop the proof. Inherited
+lookup walks the confirmed ancestry in order and resolves only when it reaches
+the first ancestor with one stable direct undecorated declaration of the
+requested member.
+
+For class-receiver calls, the existing
+`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` and
+`INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` proof kinds are reused;
+the proof provenance reflects the receiver class's proven direct-base path while
+the target is the actual declaring ancestor member. For local
+constructor-backed instance calls, the existing A1/A2/A3 constructor provenance
+is still required and `LOCAL_INSTANCE_INHERITED_METHOD_BINDING` resolves to the
+same declaring ancestor, including when that ancestor lives in another source
+file.
 
 C5J-B2 remains the complementary same-file subclass-owned case. When the
 supported same-file one-hop inheritance shape is present but `Worker` itself
@@ -419,13 +427,13 @@ method.
 class reached through one stable direct internal import.
 
 The original C5I direct class-attribute proof deliberately rejects classes with
-inheritance or class keywords such as an explicit metaclass. C5J-B1 handles a
-separate, narrower one-hop same-file inherited-member shape, while C5J-B3B
-extends only that inherited-member path to one stable directly imported
-plain-name base proven through the existing internal import-binding machinery.
-Neither path weakens the original direct-member proof. Decorated or rebound
-methods, caller-side direct attribute assignment, recognized `setattr()`
-mutation, and other unstable binding shapes also prevent positive proof.
+inheritance or class keywords such as an explicit metaclass. C5J-B1 introduces
+the separate same-file inherited-member path, C5J-B3B allows a stable directly
+imported plain-name base, and C5J-B4A composes those same direct-base proofs
+across a stable linear ancestry. None of these paths weakens the original
+direct-member proof. Decorated or rebound methods, caller-side direct attribute
+assignment, recognized `setattr()` mutation, and other unstable binding shapes
+also prevent positive proof.
 
 C5J-A1 adds one local constructor-instance proof, C5J-A2 extends the caller
 scope accepted by that same proof, and C5J-A3 permits the constructor provenance
@@ -444,27 +452,26 @@ The passive-gap proof accepts only `pass`, constant expression statements, and
 plain assignments to non-receiver names whose values are composed only of
 constants, non-receiver loaded names, tuples, or lists of those values.
 
-C5J-B1 and C5J-B3B together provide three inheritance-specific proof kinds.
+C5J-B1, C5J-B3B, and C5J-B4A reuse three inheritance-specific proof kinds.
 
-`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` confirms a supported
-`Worker.execute(...)` call when `Worker` is one stable same-file direct
-top-level class with exactly one stable same-file plain-name base and the
-requested member is uniquely and stably declared on that base. The resolved
-target is the declaring base member, such as `Base.execute`, rather than a
-synthetic `Worker.execute` target.
+`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` confirms a supported inherited
+`Worker.execute(...)` call when the receiver class's direct base is proven
+through the stable same-file path. The resolved target is the first stable
+direct undecorated ancestor member found along the confirmed linear ancestry,
+rather than a synthetic `Worker.execute` target.
 
-`INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` confirms the
-corresponding class-receiver relationship when the one plain-name direct base
-is established through one stable resolved internal `from ... import ...`
-binding, including an imported alias. The target remains the declaring member
-in the imported base source rather than a synthetic child member.
+`INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` provides the
+corresponding class-receiver proof when the receiver class's direct base is
+established through one stable resolved internal `from ... import ...` binding,
+including an imported alias. The declaring member may be farther up the same
+confirmed linear ancestry and may live in another source file.
 
-`LOCAL_INSTANCE_INHERITED_METHOD_BINDING` applies inherited-member proof to the
-existing constructor-backed local receiver path for either supported same-file
-or imported direct-base provenance. The zero-argument constructor must already
-be positively resolved, A1/A2/A3 receiver-binding and passive-gap requirements
-still apply, and relevant `__new__`, `__init__`, and `__getattribute__`
-bindings or mutations prevent instance confirmation.
+`LOCAL_INSTANCE_INHERITED_METHOD_BINDING` applies the same inherited-member
+lookup to the existing constructor-backed local receiver path. The zero-argument
+constructor must already be positively resolved, A1/A2/A3 receiver-binding and
+passive-gap requirements still apply, and every confirmed ancestry class must
+satisfy the relevant `__new__`, `__init__`, and `__getattribute__` safety
+checks.
 
 The local-instance proof deliberately does not perform general type inference.
 Factory results, constructor arguments, receiver parameters including lexical
@@ -486,10 +493,12 @@ not a guarantee that the call executes at runtime.
 not satisfy positive proof remain potential, shadowed, ambiguous, unresolved,
 or dynamic evidence as appropriate.
 
-Multiple inheritance, deeper inheritance chains, module-expression or other
-dynamically expressed bases, unsupported class keywords, descriptors/decorated
-inherited members, unstable imported-base bindings, and other inheritance
-shapes outside the narrow C5J-B1/B3B paths remain unconfirmed.
+Multiple inheritance/C3 MRO, module-expression or other dynamically expressed
+bases, unsupported class keywords, descriptors/decorated inherited members,
+unstable imported-base bindings, and other non-linear inheritance shapes remain
+unconfirmed. C5J-B4A also does not broaden the B2 subclass-owned direct-member
+reuse path beyond its existing same-file one-hop shape, and `super()` semantics
+remain a later C5J stage.
 
 ## Dependency graph
 

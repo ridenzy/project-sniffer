@@ -722,5 +722,97 @@ class TraceRendererTests(
             rendered,
         )
 
+    def test_renderer_shows_deeper_imported_inherited_calls(self) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/root.py",
+                    (
+                        "class Root:\n"
+                        "    def execute(self):\n"
+                        "        return True\n"
+                    ),
+                ),
+                self.evidence(
+                    "pkg/base.py",
+                    (
+                        "from .root import Root\n"
+                        "\n"
+                        "class Base(Root):\n"
+                        "    pass\n"
+                    ),
+                ),
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "from .base import Base\n"
+                        "\n"
+                        "class Worker(Base):\n"
+                        "    pass\n"
+                        "\n"
+                        "def class_call():\n"
+                        "    return Worker.execute(None)\n"
+                        "\n"
+                        "def instance_call():\n"
+                        "    worker = Worker()\n"
+                        "    return worker.execute()\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(index)
+        )
+
+        self.assertIn("- Resolved internal calls: 3", rendered)
+        self.assertIn("- Confirmed caller endpoints: 2", rendered)
+        self.assertIn("- Confirmed callee endpoints: 2", rendered)
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::class_call` "
+                "→ "
+                "`pkg/root.py::Root.execute` "
+                "(line 7)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::instance_call` "
+                "→ "
+                "`pkg/root.py::Root.execute` "
+                "(line 11)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/app.py::class_call`\n"
+                "  - CALLS "
+                "`pkg/root.py::Root.execute` "
+                "(line 7)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/root.py::Root.execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::class_call` "
+                "(line 7)\n"
+                "  - CALLED BY "
+                "`pkg/app.py::instance_call` "
+                "(line 11)"
+            ),
+            rendered,
+        )
+
 if __name__ == "__main__":
     unittest.main()

@@ -210,36 +210,33 @@ The existing implementation can:
   statements;
 - retain `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` provenance on those confirmed
   local instance-method relationships;
-- positively confirm a conservative one-hop inherited-member shape such as
-  `class Worker(Base): ...` when `Worker` has exactly one plain-name direct
-  base and no class keywords, and that base is either one stable same-file
-  top-level class or one stable directly imported internal class reached
-  through a resolved `from ... import ...` binding, including an imported
-  alias; the base itself must have no further base or class keywords, the child
-  must have no competing binding for the requested member, and the member must
-  be one stable direct undecorated method declared on the base;
-- resolve supported same-file inherited `Worker.execute(...)` calls to the
-  actual declaring symbol `Base.execute` with
-  `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` provenance, and supported
-  imported-base class calls with
-  `INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` provenance;
+- positively confirm conservative inherited-member lookup across a stable
+  linear single-base ancestry such as `Worker(Base)` → `Base(Root)` when every
+  hop uses exactly one plain-name base with no class keywords and each base is
+  either one stable same-file top-level class or one stable directly imported
+  internal class reached through a resolved `from ... import ...` binding,
+  including imported aliases;
+- resolve a supported inherited `Worker.execute(...)` call to the first stable
+  direct undecorated ancestor that actually declares the member, retaining
+  `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` or
+  `INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` according to the
+  receiver class's proven direct-base provenance;
 - extend the existing constructor-backed local-instance path so a proven
-  `worker = Worker()` may resolve `worker.execute()` to the declaring inherited
-  base member with `LOCAL_INSTANCE_INHERITED_METHOD_BINDING` provenance for
-  either supported same-file or imported direct bases, while preserving the
-  existing constructor/passive-gap and inheritance safety requirements;
+  `worker = Worker()` may resolve `worker.execute()` to that same declaring
+  ancestor with `LOCAL_INSTANCE_INHERITED_METHOD_BINDING`, while preserving the
+  existing constructor/passive-gap and per-hop inheritance safety requirements;
 - keep the B2 subclass-owned reuse path limited to the supported same-file
   one-hop shape: when the child itself declares the requested member,
   `Worker.execute(...)` resolves to `Worker.execute` with
   `SAME_FILE_CLASS_ATTRIBUTE_BINDING`, while supported constructor-backed
   `worker.execute()` calls retain `LOCAL_INSTANCE_CONSTRUCTOR_BINDING`;
-- reject local instance proof for receiver rebinding, deletion, aliasing,
-  receiver-dependent assignments, intervening calls or control flow, factory
-  results, constructor arguments, nested-expression method calls, receiver
-  parameters, deeper nested function scopes, unsupported inheritance shapes,
-  explicit class keywords such as metaclasses, unsafe `__new__`, `__init__`,
-  or `__getattribute__` bindings, and recognized receiver/member or inheritance
-  mutation;
+- reject inherited/local-instance proof for multiple inheritance/C3 MRO,
+  module-expression bases, unstable imported-base bindings, class keywords such
+  as metaclasses, decorated or descriptor-backed members, competing bindings,
+  receiver/member or inheritance mutation, unsafe `__new__`, `__init__`, or
+  `__getattribute__` behavior, receiver rebinding/deletion/aliasing, intervening
+  calls or control flow, factory results, constructor arguments, receiver
+  parameters, nested-expression method calls, and deeper nested function scopes;
 - keep lexical `self.member()` calls and arbitrary instance calls such as
   `service.execute()` unresolved when no supported constructor-binding proof
   establishes the receiver type.
