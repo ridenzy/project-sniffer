@@ -572,6 +572,39 @@ class DependencyGraphTests(
             graph.call_resolutions[0],
         )
 
+    def test_same_file_deeper_subclass_owned_calls_become_dependency_edges(self) -> None:
+        source = (
+            "class Root:\n    pass\n\n"
+            "class Mid(Root):\n    pass\n\n"
+            "class Base(Mid):\n    pass\n\n"
+            "class Worker(Base):\n"
+            "    def execute(self):\n        return True\n\n"
+            "def class_call():\n    return Worker.execute(None)\n\n"
+            "def instance_call():\n"
+            "    worker = Worker()\n    return worker.execute()\n"
+        )
+        graph = self.graph(self.evidence("pkg/app.py", source))
+        members = tuple(
+            edge for edge in graph.edges
+            if edge.kind is DependencyKind.CALL and edge.target_symbol == "Worker.execute"
+        )
+        self.assertEqual(
+            tuple((edge.scope, edge.line, edge.source_path, edge.target_path, edge.resolution.proof) for edge in members),
+            (
+                ("class_call", 15, "pkg/app.py", "pkg/app.py", CallResolutionProof.SAME_FILE_CLASS_ATTRIBUTE_BINDING),
+                ("instance_call", 19, "pkg/app.py", "pkg/app.py", CallResolutionProof.LOCAL_INSTANCE_CONSTRUCTOR_BINDING),
+            ),
+        )
+        constructors = tuple(
+            edge for edge in graph.edges
+            if edge.kind is DependencyKind.CALL and edge.target_symbol == "Worker"
+        )
+        self.assertEqual(
+            tuple((edge.scope, edge.line) for edge in constructors),
+            (("instance_call", 18),),
+        )
+        self.assertEqual(len(graph.edges), 3)
+
     def test_same_file_one_hop_subclass_owned_calls_become_dependency_edges(
         self,
     ) -> None:

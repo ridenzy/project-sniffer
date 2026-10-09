@@ -2047,21 +2047,25 @@ def _confirmed_same_file_subclass_member_target(
         tuple[CallTarget, ...],
     ],
 ) -> tuple[
-    CallTarget,
+    tuple[CallTarget, ...],
     CallTarget,
 ] | None:
-    base_target = (
-        _confirmed_same_file_direct_base_target(
-            tree=tree,
-            class_target=class_target,
-            top_level_symbols=(
-                top_level_symbols
-            ),
-        )
+    if tree is None:
+        return None
+
+    ancestry_result = _confirmed_linear_class_ancestry(
+        tree=tree,
+        class_target=class_target,
+        top_level_symbols=top_level_symbols,
+        import_resolutions=(),
+        symbol_tables={},
+        syntax_trees={class_target.source_path: tree},
     )
 
-    if base_target is None:
+    if ancestry_result is None:
         return None
+
+    ancestry, _ = ancestry_result
 
     confirmed_member = (
         _confirmed_direct_class_member_definition_target(
@@ -2074,10 +2078,7 @@ def _confirmed_same_file_subclass_member_target(
     if confirmed_member is None:
         return None
 
-    return (
-        base_target,
-        confirmed_member,
-    )
+    return ancestry, confirmed_member
 
 def _confirmed_direct_inherited_member_target(
     *,
@@ -2273,26 +2274,6 @@ def _class_targets_allow_inherited_instance_method_proof(
                 return False
 
     return True
-
-def _classes_allow_inherited_instance_method_proof(
-    *,
-    class_tree: ast.Module | None,
-    class_target: CallTarget,
-    base_tree: ast.Module | None,
-    base_target: CallTarget,
-) -> bool:
-    if class_tree is None or base_tree is None:
-        return False
-
-    syntax_trees = {
-        class_target.source_path: class_tree,
-        base_target.source_path: base_tree,
-    }
-
-    return _class_targets_allow_inherited_instance_method_proof(
-        class_targets=(class_target, base_target),
-        syntax_trees=syntax_trees,
-    )
 
 
 def _confirmed_module_attribute_target(
@@ -3740,17 +3721,11 @@ def _resolve_local_instance_attribute_call(
         )
 
         if subclass_member is not None:
-            base_target, member_target = (
-                subclass_member
-            )
+            class_targets, member_target = subclass_member
 
-            if not _classes_allow_inherited_instance_method_proof(
-                class_tree=target_tree,
-                class_target=class_target,
-                base_tree=syntax_trees.get(
-                    base_target.source_path
-                ),
-                base_target=base_target,
+            if not _class_targets_allow_inherited_instance_method_proof(
+                class_targets=class_targets,
+                syntax_trees=syntax_trees,
             ):
                 return None
 

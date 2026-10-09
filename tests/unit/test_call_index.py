@@ -542,6 +542,45 @@ class CallIndexTests(
             (),
         )
 
+    def test_same_file_deeper_subclass_owned_calls_enter_call_index(self) -> None:
+        source = (
+            "class Root:\n    pass\n\n"
+            "class Mid(Root):\n    pass\n\n"
+            "class Base(Mid):\n    pass\n\n"
+            "class Worker(Base):\n"
+            "    def execute(self):\n        return True\n\n"
+            "def class_call():\n    return Worker.execute(None)\n\n"
+            "def instance_call():\n"
+            "    worker = Worker()\n    return worker.execute()\n"
+        )
+        index = build_call_index(self.graph(self.evidence("pkg/app.py", source)))
+        outbound = {entry.endpoint: entry for entry in index.outbound}
+        inbound = {entry.endpoint: entry for entry in index.inbound}
+
+        caller = CallEndpoint(path="pkg/app.py", symbol="class_call")
+        instance = CallEndpoint(path="pkg/app.py", symbol="instance_call")
+        member = CallEndpoint(path="pkg/app.py", symbol="Worker.execute")
+        constructor = CallEndpoint(path="pkg/app.py", symbol="Worker")
+
+        self.assertEqual(set(outbound), {caller, instance})
+        self.assertEqual(set(inbound), {member, constructor})
+        self.assertEqual(
+            tuple((e.target_symbol, e.line) for e in outbound[caller].edges),
+            (("Worker.execute", 15),),
+        )
+        self.assertEqual(
+            tuple((e.target_symbol, e.line) for e in outbound[instance].edges),
+            (("Worker", 18), ("Worker.execute", 19)),
+        )
+        self.assertEqual(
+            tuple((e.scope, e.line) for e in inbound[member].edges),
+            (("class_call", 15), ("instance_call", 19)),
+        )
+        self.assertEqual(
+            tuple((e.scope, e.line) for e in inbound[constructor].edges),
+            (("instance_call", 18),),
+        )
+
     def test_same_file_one_hop_subclass_owned_calls_enter_call_index(
         self,
     ) -> None:

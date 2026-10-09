@@ -352,14 +352,15 @@ is still required and `LOCAL_INSTANCE_INHERITED_METHOD_BINDING` resolves to the
 same declaring ancestor, including when that ancestor lives in another source
 file.
 
-C5J-B2 remains the complementary same-file subclass-owned case. When the
-supported same-file one-hop inheritance shape is present but `Worker` itself
-directly owns the requested stable undecorated method, the resolver may reuse
-the existing direct-member proofs rather than manufacturing an inherited
-target. `Worker.execute(...)` therefore resolves to `Worker.execute` with
-`SAME_FILE_CLASS_ATTRIBUTE_BINDING`, and a supported constructor-backed
-`worker.execute()` retains `LOCAL_INSTANCE_CONSTRUCTOR_BINDING`. No new proof
-kind is introduced.
+C5J-B2 established the complementary same-file subclass-owned case for one
+inheritance hop. C5J-B4B extends that direct-member proof across stable linear
+single-base ancestry of multiple levels when every class is in the same file.
+If `Worker` itself declares the stable undecorated method, `Worker.execute(...)`
+still targets `Worker.execute` with `SAME_FILE_CLASS_ATTRIBUTE_BINDING` rather
+than inventing an inherited target. A supported constructor-backed
+`worker.execute()` retains `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` only if every
+ancestor passes the instance-dispatch safety checks. No new proof kind is
+introduced, and imported-base subclass-owned paths remain unconfirmed.
 
 Call resolution still distinguishes potential internal, unresolved, ambiguous,
 shadowed, resolved-internal, and dynamic outcomes. Arbitrary instance receivers
@@ -496,9 +497,9 @@ or dynamic evidence as appropriate.
 Multiple inheritance/C3 MRO, module-expression or other dynamically expressed
 bases, unsupported class keywords, descriptors/decorated inherited members,
 unstable imported-base bindings, and other non-linear inheritance shapes remain
-unconfirmed. C5J-B4A also does not broaden the B2 subclass-owned direct-member
-reuse path beyond its existing same-file one-hop shape, and `super()` semantics
-remain a later C5J stage.
+unconfirmed. C5J-B4B broadens subclass-owned direct-member proof only across
+stable same-file linear ancestry; imported-base subclass-owned cases remain
+unconfirmed. `super()` semantics remain a later C5J stage.
 
 ## Dependency graph
 

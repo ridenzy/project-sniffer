@@ -3336,21 +3336,6 @@ class PythonCallResolutionTests(
                 CallResolutionStatus.POTENTIAL_INTERNAL,
             ),
             (
-                "deeper_inheritance",
-                (
-                    "class Root:\n"
-                    "    pass\n"
-                    "\n"
-                    "class Base(Root):\n"
-                    "    pass\n"
-                    "\n"
-                    "class Worker(Base):\n"
-                    "    def execute(self):\n"
-                    "        return True\n"
-                ),
-                CallResolutionStatus.POTENTIAL_INTERNAL,
-            ),
-            (
                 "decorated_child_member",
                 (
                     "class Base:\n"
@@ -3653,6 +3638,60 @@ class PythonCallResolutionTests(
                 .LOCAL_INSTANCE_CONSTRUCTOR_BINDING
             ),
         )
+
+    def test_same_file_deeper_subclass_owned_method_calls_are_resolved_internal(self) -> None:
+        cases = (
+            (
+                "three_level",
+                (
+                    "class Root:", "    pass", "",
+                    "class Base(Root):", "    pass",
+                ),
+            ),
+            (
+                "four_level",
+                (
+                    "class Root:", "    pass", "",
+                    "class Mid(Root):", "    pass", "",
+                    "class Base(Mid):", "    pass",
+                ),
+            ),
+        )
+
+        for case_name, prefix in cases:
+            with self.subTest(case=case_name):
+                source = "\n".join((*prefix, "",
+                    "class Worker(Base):",
+                    "    def execute(self):",
+                    "        return True", "",
+                    "def class_call():",
+                    "    return Worker.execute(None)", "",
+                    "def instance_call():",
+                    "    worker = Worker()",
+                    "    return worker.execute()",
+                )) + "\n"
+
+                resolutions = self.resolve(self.evidence("pkg/app.py", source))
+                matches = [
+                    item for item in resolutions
+                    if item.evidence.target_parts in (
+                        ("Worker", "execute"), ("worker", "execute")
+                    )
+                ]
+                self.assertEqual(len(matches), 2)
+                calls = {item.evidence.target_parts: item for item in matches}
+
+                for parts, proof in (
+                    (("Worker", "execute"), CallResolutionProof.SAME_FILE_CLASS_ATTRIBUTE_BINDING),
+                    (("worker", "execute"), CallResolutionProof.LOCAL_INSTANCE_CONSTRUCTOR_BINDING),
+                ):
+                    resolution = calls[parts]
+                    self.assertIs(resolution.status, CallResolutionStatus.RESOLVED_INTERNAL)
+                    self.assertIs(resolution.proof, proof)
+                    self.assertIsNotNone(resolution.resolved_target)
+                    self.assertEqual(resolution.resolved_target.source_path, "pkg/app.py")
+                    self.assertEqual(resolution.resolved_target.qualified_name, "Worker.execute")
+                    self.assertEqual(resolution.candidate_targets, (resolution.resolved_target,))
 
 if __name__ == "__main__":
     unittest.main()

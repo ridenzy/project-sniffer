@@ -225,11 +225,14 @@ The existing implementation can:
   `worker = Worker()` may resolve `worker.execute()` to that same declaring
   ancestor with `LOCAL_INSTANCE_INHERITED_METHOD_BINDING`, while preserving the
   existing constructor/passive-gap and per-hop inheritance safety requirements;
-- keep the B2 subclass-owned reuse path limited to the supported same-file
-  one-hop shape: when the child itself declares the requested member,
-  `Worker.execute(...)` resolves to `Worker.execute` with
-  `SAME_FILE_CLASS_ATTRIBUTE_BINDING`, while supported constructor-backed
-  `worker.execute()` calls retain `LOCAL_INSTANCE_CONSTRUCTOR_BINDING`;
+- extend the B2 subclass-owned direct-member proof with C5J-B4B across stable
+  multi-level linear ancestry entirely within one source file. When the child
+  declares the stable undecorated member, `Worker.execute(...)` targets
+  `Worker.execute` with `SAME_FILE_CLASS_ATTRIBUTE_BINDING`. Supported
+  constructor-backed `worker.execute()` retains
+  `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` only after every ancestor passes the
+  instance-dispatch safety checks. Imported-base subclass-owned paths remain
+  unconfirmed;
 - reject inherited/local-instance proof for multiple inheritance/C3 MRO,
   module-expression bases, unstable imported-base bindings, class keywords such
   as metaclasses, decorated or descriptor-backed members, competing bindings,

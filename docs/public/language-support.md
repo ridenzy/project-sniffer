@@ -61,13 +61,13 @@ call to the first stable direct undecorated ancestor that actually declares the
 member, while `LOCAL_INSTANCE_INHERITED_METHOD_BINDING` applies the same lookup
 to an existing A1/A2/A3 constructor-backed local instance.
 
-C5J-B2 covers the complementary same-file case where that supported one-hop
-subclass directly owns the requested method. The resolved target remains the
-subclass member, such as `Worker.execute`, and the resolver reuses
-`SAME_FILE_CLASS_ATTRIBUTE_BINDING` for the class call and
-`LOCAL_INSTANCE_CONSTRUCTOR_BINDING` for the supported constructor-backed
-instance call. B2 adds no new proof kind; the overall positive-proof count is
-now nine because B3B adds the imported inherited class-attribute proof.
+C5J-B2 established the complementary same-file one-hop case for a directly
+subclass-owned method. C5J-B4B extends it across multi-level stable linear
+ancestry entirely in one source file. The target remains the subclass member,
+such as `Worker.execute`, with `SAME_FILE_CLASS_ATTRIBUTE_BINDING` for class
+calls and `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` for supported constructor-backed
+instance calls whose complete ancestry passes instance-dispatch checks. B4B
+adds no proof kind; the positive-proof count remains nine.
 
 Explicit module/class attribute calls affected by caller or target mutation,
 decorated or rebound methods, unsupported inheritance shapes, class keywords
@@ -76,8 +76,9 @@ separate from confirmed `CALL` relationships. The current inherited-member
 proof supports stable linear ancestry only: every hop must use one plain-name
 base proven as a stable same-file or directly imported internal class. Multiple
 inheritance/C3 MRO, module-expression bases, unstable imports, descriptors, and
-other unsupported shapes remain unconfirmed. The B2 subclass-owned
-direct-member path remains limited to its same-file one-hop shape.
+other unsupported shapes remain unconfirmed. The B4B subclass-owned
+direct-member path supports deeper same-file ancestry only; imported-base
+subclass-owned paths remain unconfirmed.
 
 Local instance calls also remain unconfirmed when the
 narrow constructor proof does not apply, including factory results, constructor
@@ -237,9 +238,10 @@ conservative direct-name call candidates, compiler-assisted shadowing evidence,
 AST-assisted binding checks, structured dynamic-call classification, and
 positively proven internal calls. Confirmed calls may currently be proven
 through stable direct-name bindings, the conservative C5I module/class attribute
-proofs, the C5J constructor-backed local-instance proof family, or the
-C5J-B1/B3B/B4A inherited-member paths for stable linear single-base ancestry
-whose hops use same-file or directly imported internal plain-name bases.
+proofs, the C5J constructor-backed local-instance proof family, the
+C5J-B1/B3B/B4A inherited-member paths across supported same-file or imported
+linear ancestry, or the C5J-B4B subclass-owned path for entirely same-file
+linear ancestry.
 
 Broader instance propagation, factory return-type inference, multiple
 inheritance/C3 MRO resolution, `super()` semantics, decorated/descriptor method

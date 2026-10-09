@@ -203,6 +203,17 @@ The project is still in pre-1.0 development.
 - C5J-B4A does not broaden the B2 subclass-owned direct-member path beyond its
   same-file one-hop shape and does not add multiple-inheritance/C3 MRO,
   `super()`, descriptor, or decorated-member semantics.
+- C5J-B4B extends the B2 subclass-owned direct-member proof through stable
+  multi-level same-file linear ancestry, reusing the B4A ancestry checker and
+  existing direct-member proof kinds without another resolver.
+- Confirmed class calls still target the child's directly declared method using
+  `SAME_FILE_CLASS_ATTRIBUTE_BINDING`; safe constructor-backed instance calls
+  retain `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` after full-ancestry checks for
+  `__new__`, `__init__`, and `__getattribute__`.
+- Imported-base subclass-owned paths, multiple inheritance/C3 MRO,
+  metaclasses, `__init_subclass__`, module-expression bases, mutation,
+  `super()`, descriptors, and decorated members remain outside this proof.
+  Added resolver, dependency graph, call index, and trace regressions.
 
 ### Changed
 

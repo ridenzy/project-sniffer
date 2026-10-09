@@ -424,6 +424,36 @@ class TraceRendererTests(
             rendered,
         )
 
+    def test_renderer_shows_same_file_deeper_subclass_owned_calls(self) -> None:
+        source = (
+            "class Root:\n    pass\n\n"
+            "class Mid(Root):\n    pass\n\n"
+            "class Base(Mid):\n    pass\n\n"
+            "class Worker(Base):\n"
+            "    def execute(self):\n        return True\n\n"
+            "def class_call():\n    return Worker.execute(None)\n\n"
+            "def instance_call():\n"
+            "    worker = Worker()\n    return worker.execute()\n"
+        )
+        index = build_semantic_project_index((self.evidence("pkg/app.py", source),))
+        rendered = render_dependency_graph(build_dependency_graph(index))
+
+        for text in (
+            "- Resolved internal calls: 3",
+            "- Confirmed caller endpoints: 2",
+            "- Confirmed callee endpoints: 2",
+            "- [CALL] `pkg/app.py::class_call` → `pkg/app.py::Worker.execute` (line 15)",
+            "- [CALL] `pkg/app.py::instance_call` → `pkg/app.py::Worker.execute` (line 19)",
+            "`pkg/app.py::class_call`\n  - CALLS `pkg/app.py::Worker.execute` (line 15)",
+            "`pkg/app.py::Worker.execute`\n"
+            "  - CALLED BY `pkg/app.py::class_call` (line 15)\n"
+            "  - CALLED BY `pkg/app.py::instance_call` (line 19)",
+        ):
+            self.assertIn(text, rendered)
+
+        for invented in ("Base.execute", "Mid.execute", "Root.execute"):
+            self.assertNotIn(f"`pkg/app.py::{invented}`", rendered)
+
     def test_renderer_shows_same_file_one_hop_subclass_owned_calls(
         self,
     ) -> None:
