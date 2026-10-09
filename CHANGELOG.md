@@ -214,6 +214,16 @@ The project is still in pre-1.0 development.
   metaclasses, `__init_subclass__`, module-expression bases, mutation,
   `super()`, descriptors, and decorated members remain outside this proof.
   Added resolver, dependency graph, call index, and trace regressions.
+- C5J-B4C-A1 adds a bounded inherited class-method lookup through exactly two
+  distinct stable same-file root bases, selecting the first stable undecorated
+  directly declared member in the bases' declared order.
+- The new path reuses `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` without a
+  new proof kind or general C3 MRO engine. Constructor-backed multiple-
+  inheritance instance-method calls remain unresolved.
+- Deeper/diamond inheritance, imported multiple bases, three-base classes,
+  metaclasses, mutation, decorated methods, and other unsupported multiple-
+  inheritance shapes remain unconfirmed. Added precedence/refusal, dependency
+  graph, call index, renderer, and installed-CLI trace acceptance coverage.
 
 ### Changed
 

@@ -1729,6 +1729,7 @@ def _confirmed_same_file_direct_base_target(
         tuple[CallTarget, ...],
     ],
     allow_deeper: bool = False,
+    base_name: str | None = None,
 ) -> CallTarget | None:
     if tree is None:
         return None
@@ -1743,9 +1744,8 @@ def _confirmed_same_file_direct_base_target(
     if class_node is None:
         return None
 
-    base_name = direct_plain_base_name(
-        class_node
-    )
+    if base_name is None:
+        base_name = direct_plain_base_name(class_node)
 
     if base_name is None:
         return None
@@ -2080,6 +2080,81 @@ def _confirmed_same_file_subclass_member_target(
 
     return ancestry, confirmed_member
 
+def _confirmed_shallow_same_file_multiple_inherited_member_target(
+    *,
+    tree: ast.Module,
+    class_target: CallTarget,
+    member_name: str,
+    top_level_symbols: dict[tuple[str, str], tuple[CallTarget, ...]],
+    qualified_symbols: dict[tuple[str, str], tuple[CallTarget, ...]],
+) -> tuple[tuple[CallTarget, ...], CallTarget, CallResolutionProof] | None:
+    """Confirm a two-root-base MRO prefix without widening linear ancestry."""
+    class_node = _find_direct_class_definition(tree=tree, target=class_target)
+    if class_node is None or class_node.keywords or len(class_node.bases) != 2:
+        return None
+
+    if not all(isinstance(base, ast.Name) for base in class_node.bases):
+        return None
+
+    base_names = tuple(base.id for base in class_node.bases)
+    if len(set(base_names)) != 2:
+        return None
+
+    bases = []
+    winner = None
+
+    for base_name in base_names:
+        base_target = _confirmed_same_file_direct_base_target(
+            tree=tree,
+            class_target=class_target,
+            top_level_symbols=top_level_symbols,
+            base_name=base_name,
+        )
+        if base_target is None:
+            return None
+
+        base_node = _find_direct_class_definition(tree=tree, target=base_target)
+        if base_node is None or base_node.bases:
+            return None
+
+        if _named_receiver_attribute_mutation_exists(
+            tree=tree, receiver_name=base_name, member_name=member_name,
+        ):
+            return None
+
+        members = _ordered_unique_targets(qualified_symbols.get(
+            (base_target.source_path, f"{base_target.qualified_name}.{member_name}"), (),
+        ))
+        if len(members) > 1:
+            return None
+
+        if members:
+            member_target = _confirmed_direct_class_member_definition_target(
+                tree=tree, class_target=base_target, member_target=members[0],
+            )
+            if member_target is None:
+                return None
+            if winner is None:
+                winner = member_target
+        elif (
+            _class_binding_sites(tree=tree, class_node=base_node, name=member_name)
+            or _named_receiver_attribute_mutation_exists(
+                tree=tree, receiver_name=base_target.qualified_name, member_name=member_name,
+            )
+        ):
+            return None
+
+        bases.append(base_target)
+
+    if winner is None:
+        return None
+
+    return (
+        (class_target, *bases), winner,
+        CallResolutionProof.SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING,
+    )
+
+
 def _confirmed_direct_inherited_member_target(
     *,
     tree: ast.Module | None,
@@ -2126,7 +2201,13 @@ def _confirmed_direct_inherited_member_target(
     )
 
     if ancestry_result is None:
-        return None
+        return _confirmed_shallow_same_file_multiple_inherited_member_target(
+            tree=tree,
+            class_target=class_target,
+            member_name=member_name,
+            top_level_symbols=top_level_symbols,
+            qualified_symbols=qualified_symbols,
+        )
 
     ancestry, inherited_proof = ancestry_result
 

@@ -542,6 +542,39 @@ class CallIndexTests(
             (),
         )
 
+    def test_shallow_two_root_inherited_calls_enter_call_index(self) -> None:
+        source = (
+            "class Left:\n    def execute(self):\n        return True\n\n"
+            "class Right:\n    def execute(self):\n        return False\n\n"
+            "class Worker(Left, Right):\n    pass\n\n"
+            "class ReverseWorker(Right, Left):\n    pass\n\n"
+            "def class_call():\n    return Worker.execute(None)\n\n"
+            "def reverse_call():\n    return ReverseWorker.execute(None)\n\n"
+            "def instance_call():\n    worker = Worker()\n    return worker.execute()\n"
+        )
+        index = build_call_index(self.graph(self.evidence("pkg/app.py", source)))
+        outbound = {entry.endpoint.symbol: entry for entry in index.outbound}
+        inbound = {entry.endpoint.symbol: entry for entry in index.inbound}
+
+        self.assertEqual(set(outbound), {"class_call", "reverse_call", "instance_call"})
+        self.assertEqual(set(inbound), {"Left.execute", "Right.execute", "Worker"})
+
+        for caller, target, line in (
+            ("class_call", "Left.execute", 16),
+            ("reverse_call", "Right.execute", 19),
+            ("instance_call", "Worker", 22),
+        ):
+            self.assertEqual(outbound[caller].endpoint, CallEndpoint(path="pkg/app.py", symbol=caller))
+            self.assertEqual(inbound[target].endpoint, CallEndpoint(path="pkg/app.py", symbol=target))
+            self.assertEqual(
+                tuple((edge.target_symbol, edge.line) for edge in outbound[caller].edges),
+                ((target, line),),
+            )
+            self.assertEqual(
+                tuple((edge.scope, edge.line) for edge in inbound[target].edges),
+                ((caller, line),),
+            )
+
     def test_same_file_deeper_subclass_owned_calls_enter_call_index(self) -> None:
         source = (
             "class Root:\n    pass\n\n"

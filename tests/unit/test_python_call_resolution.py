@@ -3245,6 +3245,20 @@ class PythonCallResolutionTests(
                     )
                 )
 
+                if case_name == "multiple_inheritance":
+                    self.assertIs(class_resolution.status, CallResolutionStatus.RESOLVED_INTERNAL)
+                    self.assertIs(
+                        class_resolution.proof,
+                        CallResolutionProof.SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING,
+                    )
+                    self.assertIsNotNone(class_resolution.resolved_target)
+                    self.assertEqual(class_resolution.resolved_target.qualified_name, "Base.execute")
+                    self.assertEqual(class_resolution.candidate_targets, (class_resolution.resolved_target,))
+                    self.assertIs(instance_resolution.status, CallResolutionStatus.UNRESOLVED)
+                    self.assertIsNone(instance_resolution.proof)
+                    self.assertIsNone(instance_resolution.resolved_target)
+                    continue
+
                 if case_name == "deeper_inheritance":
                     self.assertIs(
                         class_resolution.status,
@@ -3315,6 +3329,158 @@ class PythonCallResolutionTests(
                 self.assertIsNone(
                     instance_resolution.resolved_target
                 )
+
+    def test_shallow_two_root_inheritance_order_and_refusal_boundaries(self) -> None:
+        cases = (
+            (
+                "left_member",
+                "class Left:\n    def execute(self): return True\n"
+                "class Right: pass\nclass Worker(Left, Right): pass\n",
+                "Left.execute",
+            ),
+            (
+                "right_member",
+                "class Left: pass\nclass Right:\n    def execute(self): return True\n"
+                "class Worker(Left, Right): pass\n",
+                "Right.execute",
+            ),
+            (
+                "both_members_left_wins",
+                "class Left:\n    def execute(self): return True\n"
+                "class Right:\n    def execute(self): return False\n"
+                "class Worker(Left, Right): pass\n",
+                "Left.execute",
+            ),
+            (
+                "reversed_bases_right_wins",
+                "class Left:\n    def execute(self): return True\n"
+                "class Right:\n    def execute(self): return False\n"
+                "class Worker(Right, Left): pass\n",
+                "Right.execute",
+            ),
+            (
+                "neither_member",
+                "class Left: pass\nclass Right: pass\nclass Worker(Left, Right): pass\n",
+                None,
+            ),
+            (
+                "left_decorated",
+                "class Left:\n    @staticmethod\n    def execute(): return True\n"
+                "class Right:\n    def execute(self): return False\n"
+                "class Worker(Left, Right): pass\n",
+                None,
+            ),
+            (
+                "right_decorated",
+                "class Left:\n    def execute(self): return True\n"
+                "class Right:\n    @staticmethod\n    def execute(): return False\n"
+                "class Worker(Left, Right): pass\n",
+                None,
+            ),
+            (
+                "left_binding_shadows_right",
+                "class Left:\n    execute = replacement\n"
+                "class Right:\n    def execute(self): return True\n"
+                "class Worker(Left, Right): pass\n",
+                None,
+            ),
+            (
+                "right_binding_is_uncertain",
+                "class Left:\n    def execute(self): return True\n"
+                "class Right:\n    execute = replacement\n"
+                "class Worker(Left, Right): pass\n",
+                None,
+            ),
+            (
+                "right_init_subclass",
+                "class Left:\n    def execute(self): return True\n"
+                "class Right:\n    def __init_subclass__(cls): pass\n"
+                "class Worker(Left, Right): pass\n",
+                None,
+            ),
+            (
+                "mutated_right_member",
+                "class Left:\n    def execute(self): return True\n"
+                "class Right: pass\nclass Worker(Left, Right): pass\n"
+                "Right.execute = replacement\n",
+                None,
+            ),
+            (
+                "mutated_child_bases",
+                "class Left:\n    def execute(self): return True\n"
+                "class Right: pass\nclass Worker(Left, Right): pass\n"
+                "Worker.__bases__ = (Right,)\n",
+                None,
+            ),
+            (
+                "metaclass_keyword",
+                "class Meta(type): pass\nclass Left:\n    def execute(self): return True\n"
+                "class Right: pass\nclass Worker(Left, Right, metaclass=Meta): pass\n",
+                None,
+            ),
+            (
+                "three_bases",
+                "class Left:\n    def execute(self): return True\n"
+                "class Right: pass\nclass Third: pass\n"
+                "class Worker(Left, Right, Third): pass\n",
+                None,
+            ),
+            (
+                "deeper_base",
+                "class Root: pass\nclass Left(Root):\n    def execute(self): return True\n"
+                "class Right: pass\nclass Worker(Left, Right): pass\n",
+                None,
+            ),
+            (
+                "duplicate_base",
+                "class Left:\n    def execute(self): return True\n"
+                "class Worker(Left, Left): pass\n",
+                None,
+            ),
+            (
+                "rebinding_first_base",
+                "class Left:\n    def execute(self): return True\n"
+                "class Right: pass\nclass Worker(Left, Right): pass\nLeft = Right\n",
+                None,
+            ),
+        )
+
+        for name, prefix, expected_target in cases:
+            with self.subTest(case=name):
+                source = (
+                    prefix
+                    + "\ndef class_call():\n    return Worker.execute(None)\n"
+                    + "\ndef instance_call():\n"
+                    + "    worker = Worker()\n    return worker.execute()\n"
+                )
+                resolutions = self.resolve(self.evidence("pkg/app.py", source))
+                class_result = next(
+                    item for item in resolutions
+                    if item.evidence.target_parts == ("Worker", "execute")
+                )
+                instance_result = next(
+                    item for item in resolutions
+                    if item.evidence.target_parts == ("worker", "execute")
+                )
+
+                if expected_target is None:
+                    self.assertIs(class_result.status, CallResolutionStatus.UNRESOLVED)
+                    self.assertIsNone(class_result.proof)
+                    self.assertIsNone(class_result.resolved_target)
+                else:
+                    self.assertIs(class_result.status, CallResolutionStatus.RESOLVED_INTERNAL)
+                    self.assertIs(
+                        class_result.proof,
+                        CallResolutionProof.SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING,
+                    )
+                    self.assertIsNotNone(class_result.resolved_target)
+                    self.assertEqual(class_result.resolved_target.source_path, "pkg/app.py")
+                    self.assertEqual(class_result.resolved_target.qualified_name, expected_target)
+                    self.assertEqual(class_result.candidate_targets, (class_result.resolved_target,))
+
+                self.assertIs(instance_result.status, CallResolutionStatus.UNRESOLVED)
+                self.assertIsNone(instance_result.proof)
+                self.assertIsNone(instance_result.resolved_target)
 
     def test_same_file_one_hop_subclass_owned_method_safety_boundaries(
         self,

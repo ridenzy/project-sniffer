@@ -424,6 +424,44 @@ class TraceRendererTests(
             rendered,
         )
 
+    def test_renderer_shows_shallow_two_root_inherited_calls(self) -> None:
+        source = (
+            "class Left:\n    def execute(self):\n        return True\n\n"
+            "class Right:\n    def execute(self):\n        return False\n\n"
+            "class Worker(Left, Right):\n    pass\n\n"
+            "class ReverseWorker(Right, Left):\n    pass\n\n"
+            "def class_call():\n    return Worker.execute(None)\n\n"
+            "def reverse_call():\n    return ReverseWorker.execute(None)\n\n"
+            "def instance_call():\n    worker = Worker()\n    return worker.execute()\n"
+        )
+        index = build_semantic_project_index((self.evidence("pkg/app.py", source),))
+        rendered = render_dependency_graph(build_dependency_graph(index))
+
+        required = (
+            "- Resolved internal calls: 3",
+            "- Unresolved calls: 1",
+            "- Confirmed caller endpoints: 3",
+            "- Confirmed callee endpoints: 3",
+            "- [CALL] `pkg/app.py::class_call` → `pkg/app.py::Left.execute` (line 16)",
+            "- [CALL] `pkg/app.py::reverse_call` → `pkg/app.py::Right.execute` (line 19)",
+            "- [CALL] `pkg/app.py::instance_call` → `pkg/app.py::Worker` (line 22)",
+            "`pkg/app.py::class_call`\n  - CALLS `pkg/app.py::Left.execute` (line 16)",
+            "`pkg/app.py::reverse_call`\n  - CALLS `pkg/app.py::Right.execute` (line 19)",
+            "`pkg/app.py::Left.execute`\n  - CALLED BY `pkg/app.py::class_call` (line 16)",
+            "`pkg/app.py::Right.execute`\n  - CALLED BY `pkg/app.py::reverse_call` (line 19)",
+            "- `pkg/app.py`:23 `worker.execute` (scope `instance_call`)",
+        )
+
+        for fragment in required:
+            self.assertIn(fragment, rendered)
+
+        self.assertEqual(
+            sum(line.startswith("- [CALL] ") for line in rendered.splitlines()),
+            3,
+        )
+        self.assertNotIn("`pkg/app.py::Worker.execute`", rendered)
+        self.assertNotIn("`pkg/app.py::ReverseWorker.execute`", rendered)
+
     def test_renderer_shows_same_file_deeper_subclass_owned_calls(self) -> None:
         source = (
             "class Root:\n    pass\n\n"

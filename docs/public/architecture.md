@@ -362,6 +362,17 @@ than inventing an inherited target. A supported constructor-backed
 ancestor passes the instance-dispatch safety checks. No new proof kind is
 introduced, and imported-base subclass-owned paths remain unconfirmed.
 
+C5J-B4C-A1 adds a separate shallow inherited *class-receiver* lookup for
+exactly two distinct stable same-file bases that have no bases of their own.
+It checks both bases and their requested method bindings conservatively,
+selecting the first stable direct undecorated declaration in base order.
+`Worker(Left, Right)` may therefore resolve `Worker.execute(...)` to
+`Left.execute`, and reversing the bases may resolve to `Right.execute`.
+The existing `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` proof is reused;
+no full C3 linearization, imported multi-base lookup, or multiple-inheritance
+instance-method proof is introduced. A separately confirmed `Worker()`
+constructor call is not proof of `worker.execute()` for this shape.
+
 Call resolution still distinguishes potential internal, unresolved, ambiguous,
 shadowed, resolved-internal, and dynamic outcomes. Arbitrary instance receivers
 such as `service.execute()` and attribute chains outside the narrow proven
@@ -453,13 +464,14 @@ The passive-gap proof accepts only `pass`, constant expression statements, and
 plain assignments to non-receiver names whose values are composed only of
 constants, non-receiver loaded names, tuples, or lists of those values.
 
-C5J-B1, C5J-B3B, and C5J-B4A reuse three inheritance-specific proof kinds.
+C5J-B1/B3B/B4A and the bounded C5J-B4C-A1 path reuse the existing three
+inheritance-specific proof kinds.
 
-`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` confirms a supported inherited
-`Worker.execute(...)` call when the receiver class's direct base is proven
-through the stable same-file path. The resolved target is the first stable
-direct undecorated ancestor member found along the confirmed linear ancestry,
-rather than a synthetic `Worker.execute` target.
+`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` confirms supported inherited
+`Worker.execute(...)` calls with proven same-file base bindings. Its target is
+the actual stable declaring method, not a synthetic `Worker.execute`: either
+the first declaration on a confirmed linear ancestry or the first qualifying
+declaration under B4C-A1's shallow two-root-base ordering.
 
 `INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` provides the
 corresponding class-receiver proof when the receiver class's direct base is
@@ -494,10 +506,13 @@ not a guarantee that the call executes at runtime.
 not satisfy positive proof remain potential, shadowed, ambiguous, unresolved,
 or dynamic evidence as appropriate.
 
-Multiple inheritance/C3 MRO, module-expression or other dynamically expressed
-bases, unsupported class keywords, descriptors/decorated inherited members,
-unstable imported-base bindings, and other non-linear inheritance shapes remain
-unconfirmed. C5J-B4B broadens subclass-owned direct-member proof only across
+General multiple inheritance/C3 MRO (including deeper or diamond shapes,
+imported bases, and three-base classes), module-expression or other dynamically
+expressed bases, unsupported class keywords, descriptors/decorated inherited
+members, and unstable imported-base bindings remain unconfirmed outside the
+bounded B4C-A1 class-receiver path.
+
+C5J-B4B broadens subclass-owned direct-member proof only across
 stable same-file linear ancestry; imported-base subclass-owned cases remain
 unconfirmed. `super()` semantics remain a later C5J stage.
 

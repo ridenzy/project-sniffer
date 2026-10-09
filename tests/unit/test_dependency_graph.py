@@ -572,6 +572,38 @@ class DependencyGraphTests(
             graph.call_resolutions[0],
         )
 
+    def test_shallow_two_root_inherited_calls_become_dependency_edges(self) -> None:
+        source = (
+            "class Left:\n    def execute(self):\n        return True\n\n"
+            "class Right:\n    def execute(self):\n        return False\n\n"
+            "class Worker(Left, Right):\n    pass\n\n"
+            "class ReverseWorker(Right, Left):\n    pass\n\n"
+            "def class_call():\n    return Worker.execute(None)\n\n"
+            "def reverse_call():\n    return ReverseWorker.execute(None)\n\n"
+            "def instance_call():\n    worker = Worker()\n    return worker.execute()\n"
+        )
+        graph = self.graph(self.evidence("pkg/app.py", source))
+        self.assertEqual(len(graph.edges), 3)
+        self.assertEqual(
+            tuple((edge.scope, edge.line, edge.target_symbol, edge.resolution.proof) for edge in graph.edges),
+            (
+                ("class_call", 16, "Left.execute", CallResolutionProof.SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING),
+                ("reverse_call", 19, "Right.execute", CallResolutionProof.SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING),
+                ("instance_call", 22, "Worker", CallResolutionProof.SAME_FILE_STABLE_BINDING),
+            ),
+        )
+        self.assertTrue(all(edge.kind is DependencyKind.CALL for edge in graph.edges))
+        self.assertTrue(all(edge.source_path == edge.target_path == "pkg/app.py" for edge in graph.edges))
+
+        unresolved = tuple(
+            result for result in graph.call_resolutions
+            if result.evidence.target_parts == ("worker", "execute")
+        )
+        self.assertEqual(len(unresolved), 1)
+        self.assertIs(unresolved[0].status, CallResolutionStatus.UNRESOLVED)
+        self.assertIsNone(unresolved[0].resolved_target)
+        self.assertIsNone(unresolved[0].proof)
+
     def test_same_file_deeper_subclass_owned_calls_become_dependency_edges(self) -> None:
         source = (
             "class Root:\n    pass\n\n"

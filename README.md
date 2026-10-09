@@ -233,8 +233,14 @@ The existing implementation can:
   `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` only after every ancestor passes the
   instance-dispatch safety checks. Imported-base subclass-owned paths remain
   unconfirmed;
-- reject inherited/local-instance proof for multiple inheritance/C3 MRO,
-  module-expression bases, unstable imported-base bindings, class keywords such
+- confirm C5J-B4C-A1 inherited `Class.method(...)` calls through exactly two
+  stable same-file root bases, selecting the first stable directly declared
+  undecorated method in base order. These class calls reuse
+  `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING`; constructor-backed instance
+  method calls through this multiple-inheritance shape stay unresolved;
+- reject unsupported multiple-inheritance/C3 MRO shapes (including deeper,
+  diamond, imported-base, and three-base cases), module-expression bases,
+  unstable imported-base bindings, class keywords such
   as metaclasses, decorated or descriptor-backed members, competing bindings,
   receiver/member or inheritance mutation, unsafe `__new__`, `__init__`, or
   `__getattribute__` behavior, receiver rebinding/deletion/aliasing, intervening
