@@ -2,55 +2,194 @@
 
 ## Current behavior
 
-The present scanner converts `IGNORE_FOLDERS` and `IGNORE_FILES` into Python
-sets and performs exact-name membership checks.
+The packaged shared scanner supports Project Sniffer ignore rules and
+target-project `.gitignore` rules.
 
-This means entries such as:
+These are separate policy layers.
+
+## Project Sniffer configuration rules
+
+The existing configuration keys remain:
+
+```text
+IGNORE_FOLDERS
+IGNORE_FILES
+```
+
+Patterns without `/` are basename patterns. The packaged recommended
+`IGNORE_FOLDERS` rule `private` therefore excludes all folders with that
+basename by default, not only `docs/private/`.
+
+Examples:
 
 ```text
 node_modules
-.git
+*.egg-info
 agents.json
+*.bak
 ```
 
-work when the discovered name matches exactly.
+These retain the existing case-sensitive basename behavior.
 
-An entry such as:
+Patterns containing `/` are interpreted as project-relative path patterns.
+
+Examples:
 
 ```text
-*.egg-info
+docs/private
+frontend/.next
+/config/private.json
 ```
 
-does not currently behave as a glob pattern.
+Project-relative patterns always use `/` as their separator, including on
+Windows.
 
-That limitation is intentional technical debt to be removed by the shared scan
-engine.
+Project Sniffer configuration does not use `!` as a re-inclusion operator.
+Recommended and personal ignore configuration remains exclusion-oriented.
 
-## Planned ignore engine
+## Target-project `.gitignore`
 
-The future matcher will support:
+Project Sniffer also reads `.gitignore` files found inside the target project.
 
-- exact folder names;
-- exact filenames;
-- project-relative paths;
-- glob patterns;
-- `.gitignore`-style matching;
-- controlled negation where safety policy permits it.
+For example:
 
-## Configuration sources
+```text
+.gitignore
+src/.gitignore
+packages/example/.gitignore
+```
 
-Ignore rules may eventually come from:
+Rules are applied relative to the directory containing each `.gitignore`.
 
-1. built-in defaults;
-2. user-wide configuration;
-3. target-project `.project-sniffer.toml`;
-4. the machine-local per-project personal registry;
-5. command-line overrides.
+A lower-level `.gitignore` can override an applicable rule inherited from a
+parent `.gitignore`.
+
+Git-style comments, directory patterns, glob patterns, `**`, and `!` negation
+are handled through the packaged `pathspec` dependency.
+
+A `.gitignore` that is itself a symbolic link is not followed.
+
+For canonical analyzer scans, target-project `.gitignore` filtering is enabled
+by default. `--minus-gitignore` disables only that layer for the current run.
+Project Sniffer recommended and personal rules and active output-directory
+exclusion remain active.
+
+## Deliberate deterministic boundary
+
+Project Sniffer does not currently read machine-specific Git ignore sources:
+
+```text
+.git/info/exclude
+core.excludesFile
+$XDG_CONFIG_HOME/git/ignore
+```
+
+This keeps the same target project from silently producing different scan
+manifests merely because it is scanned on another developer's machine.
+
+Only target-tree `.gitignore` files participate in this layer.
+
+## Precedence
+
+Current scanner precedence is:
+
+```text
+Project Sniffer recommended/personal rules
+    ↓
+active Project Sniffer output-directory exclusion
+    ↓
+target-project .gitignore hierarchy
+    ↓
+included ScanManifest entry
+```
+
+A target `.gitignore` cannot re-include an entry already removed by a Project
+Sniffer configuration rule or by output-directory exclusion.
+
+## Excluded parent directories
+
+When a directory is ignored, Project Sniffer prunes it from the single
+top-down filesystem walk.
+
+A rule inside that excluded directory therefore cannot re-include one of its
+children.
+
+This matches the documented Git behavior for excluded parent directories.
+
+## Analyzer discovery versus documentation discovery
+
+Architecture generation, source-report generation, and dependency-trace
+generation consume the canonical full-project `ScanManifest`.
+
+`--docs` deliberately uses scoped scans rooted at `docs/public/` and
+`docs/private/` instead.
+
+The scoped documentation scans still use the shared Project Sniffer scanner and
+therefore retain recommended and personal folder/file rules. Their paths are
+evaluated with the appropriate project-relative documentation prefix so rules
+such as:
+
+```text
+docs/public/internal
+docs/private/archive
+*.bak
+```
+
+continue to apply in their intended project-relative context.
+
+Target-project `.gitignore` matching is deliberately disabled for these scoped
+documentation scans. `.gitignore` remains active by default for the canonical
+analyzer scan unless that run explicitly uses `--minus-gitignore`.
+
+When the root-level `docs/private/` scope exists and is excluded (including
+by the default `private` basename rule), `--docs` requires explicit one-run
+confirmation before exposing that scope. The prompt is conditional on that
+scope being present and excluded; it is not unconditional for every `--docs`
+run. Approval overrides only the documentation-scope exclusion for this run;
+it does not rewrite ignore configuration or affect unrelated exclusions.
+
+Declining the override prevents private-report generation and removes an
+existing canonical private report from an earlier approved run.
+
+## Generated output directories
+
+Project Sniffer explicitly excludes the resolved project-specific output
+directory from the shared scan.
+
+This prevents generated architecture reports, source reports, trace reports,
+and documentation reports from entering later applicable scans when output is
+stored inside the target project.
+
+## Personal configuration
+
+The current source-tree development runtime resolves its local private
+registry from
+`src/project_sniffer/resources/personal_ignores.json`.
+
+The `personal_ignores.json` basename remains excluded by packaged recommended
+rules, so the private registry does not enter Project Sniffer's own scan
+manifest or source report.
+
+Only schema-version-1 per-project profiles are accepted. The legacy global
+personal-ignore shape is rejected.
+
+## Not implemented yet
+
+The current ignore system does not yet implement:
+
+- target-project `.project-sniffer.toml`;
+- explicit `--config`;
+- Git's machine-local `.git/info/exclude`;
+- Git's user-global `core.excludesFile`;
+- non-overridable secret-bearing source-report exclusions.
+
+The two Git machine-local sources are intentionally excluded from the current
+deterministic scan contract rather than merely forgotten.
 
 ## Non-overridable safety exclusions
 
-Normal configuration must never force recognized secret-bearing material into
-the complete source report.
+Normal configuration must eventually be unable to force recognized
+secret-bearing material into the complete source report.
 
 Examples include:
 
@@ -63,13 +202,5 @@ Examples include:
 - cookie stores;
 - other recognized secret-bearing runtime files.
 
-The secret analyzer may later inspect narrowly controlled metadata from some of
-these files, but raw values must not be persisted in ordinary reports.
-
-## Generated report directories
-
-When the selected output directory is inside the scanned project, Project
-Sniffer must automatically exclude that output tree from the scan.
-
-This prevents generated reports from recursively appearing inside newer
-reports.
+That stronger safety layer remains a prerequisite for the stable `--secret`
+analyzer.

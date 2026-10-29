@@ -9,37 +9,265 @@ developers, reviewers, and supervised AI-assisted engineering workflows.
 
 ## Current development state
 
-The current runnable baseline is still the original flat Python implementation.
+Project Sniffer now has an installable development package with the first
+working analyzers.
 
-Run it with:
+Implemented operations include:
 
 ```bash
-python3 main.py /full/path/to/project
+sniff --project /path/to/project --architecture
+sniff --project /path/to/project --report
+sniff --project /path/to/project --trace
+sniff --project /path/to/project --docs
+sniff --project /path/to/project --architecture --report --trace --docs
+sniff --project /path/to/project --report --minus-gitignore
 ```
 
-It currently generates:
+`--architecture`, `--report`, and `--trace` are analyzers. `--docs` is a
+separate documentation-report capability.
+
+When `--docs` is selected, Project Sniffer inspects the root-level
+`docs/public/` and `docs/private/` scopes independently and renders readable
+Markdown reports through the existing safe-reader and report-builder
+boundaries.
+
+`--minus-gitignore` is a scan control rather than an analyzer. Canonical
+analyzer scans apply target-project `.gitignore` rules by default. Supplying
+`--minus-gitignore` disables only that target `.gitignore` layer for the
+current run; Project Sniffer recommended and personal ignore rules and active
+output-directory exclusion remain in force.
+
+`--docs` does not need this override because its explicit documentation-scoped
+scans already operate with target-project `.gitignore` processing disabled.
+
+Default output is grouped by scanned project:
 
 ```text
-reports/<project-name>-architecture.md
-reports/<project-name>-project-report.md
+reports/<project-name>/
+├── <project-name>-architecture.md
+├── <project-name>-project-report.md
+├── <project-name>-trace.md
+├── <project-name>-public-docs-report.md
+└── <project-name>-private-docs-report.md
 ```
 
-The installable `sniff` command described below is part of the next package and
-CLI refactor and is not implemented yet.
+Only outputs requested and available for the current run are created.
+
+A missing `docs/public/` or `docs/private/` scope produces no report for that
+scope.
+
+Documentation-scoped scans continue to apply Project Sniffer recommended and
+personal ignore rules, as well as active output-directory exclusion. Target
+project `.gitignore` rules are intentionally not applied to these scoped
+documentation scans, allowing explicitly requested documentation such as a
+Git-ignored `docs/private/` tree to remain inspectable.
+
+If Project Sniffer configuration excludes the `docs/private/` scope, the CLI
+warns before exposing it and asks for one-run confirmation. Approval overrides
+only that private-scope exclusion for the current run; other Project Sniffer
+ignore rules remain active. Declining, submitting an empty response, or having
+no interactive response leaves the scope excluded. A stale canonical private
+documentation report is removed when that private-scope override is declined.
+
+`--output PATH` overrides the base output directory while preserving the
+project-specific subdirectory:
+
+```text
+PATH/<project-name>/<files>
+```
+
+The root-level `main.py` remains available as a positional compatibility entry
+point and delegates to the packaged runtime used by `sniff`. It preserves the
+original architecture-plus-report behavior; `--trace` and `--docs` are selected
+explicitly through the installed CLI.
 
 ## Current capabilities
 
 The existing implementation can:
 
-- recursively scan a project;
-- skip configured folders and filenames;
+- recursively scan a project through one shared discovery manifest;
+- skip exact-name, basename-glob, and project-relative folder/file rules;
+- apply nested target-project `.gitignore` rules deterministically;
+- optionally disable target-project `.gitignore` filtering for canonical
+  analyzer scans with `--minus-gitignore`, without disabling Project Sniffer
+  recommended, personal, or active output-directory exclusions;
+- exclude the active Project Sniffer output directory from repeat scans;
 - generate a project tree;
 - generate a readable Markdown source report;
+- generate separate Markdown documentation reports for root-level
+  `docs/public/` and `docs/private/` scopes;
+- run documentation scopes through the shared safe reader, source-evidence
+  metadata, and Markdown report builder rather than raw-byte copying;
+- keep Project Sniffer recommended and personal ignore rules active inside
+  documentation scopes while deliberately disabling target-project
+  `.gitignore` filtering for those scoped scans;
+- require explicit one-run approval before overriding a Project Sniffer
+  exclusion of `docs/private/`, and remove a stale canonical private report
+  when that approval is declined;
+- read source-report files through a shared safe-reader evidence boundary;
+- refuse to follow discovered file symlinks for source content;
+- distinguish escaped symlinks and reject paths outside the resolved project root;
 - skip obvious binary files;
+- enforce an 8 MiB default per-file source-read ceiling and classify oversized
+  files without loading their full content;
 - tolerate unreadable files;
 - clean unsafe control characters;
 - generate Markdown fences that do not collide with source backticks;
 - report added and skipped file counts.
+- attach deterministic `SourceLanguage` metadata to safe-read source evidence;
+- recognize a broad registry of general-purpose, scripting, database,
+  infrastructure, web, hardware, shader, smart-contract, configuration, and
+  documentation languages from conservative path evidence;
+- preserve ambiguous source extensions as `UNKNOWN` rather than guessing;
+- route readable source evidence through a semantic parser registry without reopening target-project files;
+- parse Python source with the standard-library `ast` module into normalized
+  imports, call sites, and class, function, and async-function symbol evidence;
+- represent unsupported languages, non-text evidence, invalid text evidence, and Python syntax failures through explicit parse statuses;
+- build a shared `SemanticProjectIndex` across parsed project sources while
+  retaining original parse outcomes and source-file provenance;
+- flatten successful parser imports, symbols, and call sites into reusable
+  project-wide evidence without reopening target-project files;
+- resolve Python import evidence against scanned project files without importing
+  or executing target modules;
+- preserve unresolved, ambiguous, and invalid relative imports explicitly rather
+  than misclassifying them as confirmed external or internal dependencies;
+- recognize the conventional top-level `src/` Python source-root layout during
+  internal module resolution;
+- build an immutable project dependency graph from confirmed internal Python
+  imports and positively proven internal Python calls;
+- preserve every import- and call-resolution outcome while creating dependency
+  edges only for relationships supported by deterministic internal evidence;
+- retain source path, target path, source line, and enclosing scope on confirmed
+  dependency edges, plus target-symbol provenance on confirmed call edges;
+- render dependency traces from the shared semantic index with confirmed
+  internal Python `IMPORT` and `CALL` edges;
+- normalize Python call sites into direct-name, attribute-chain, and dynamic
+  evidence while preserving source line and enclosing parser scope;
+- resolve conservative Python direct-name call candidates against same-file
+  top-level symbols and already-resolved internal imported symbols;
+- preserve potential-internal, unresolved, ambiguous, and dynamic call outcomes
+  rather than presenting uncertain calls as confirmed relationships;
+- render call-resolution evidence through `--trace` while keeping potential
+  call targets separate from confirmed dependency edges;
+- use Python compiler symbol-table evidence to reject call candidates shadowed
+  by parameters, assignments, imports, closure bindings, and other local
+  bindings;
+- render shadowed calls separately from potential internal call candidates.
+- positively confirm direct-name calls backed by one unique resolved internal
+  `from ... import ...` binding whose compiler symbol-table entry has not been
+  reassigned and whose binding order is compatible with the call site;
+- positively confirm a conservative class of same-file direct-name calls when
+  one unique undecorated top-level function, async-function, or class binding is
+  statically stable and available before an immediately evaluated call site;
+- use already-read Python AST evidence to reject positive proof when explicit
+  rebinding, unsafe binding order, or currently unmodelled lambda/comprehension
+  shadowing makes the relationship uncertain;
+- retain explicit `INTERNAL_IMPORT_BINDING` and
+  `SAME_FILE_STABLE_BINDING` proof provenance on positively confirmed calls;
+- distinguish confirmed internal calls from potential, shadowed, ambiguous,
+  unresolved, and dynamic call evidence;
+- render confirmed caller scope and target-symbol relationships through
+  `--trace`.
+- derive deterministic caller and callee indexes exclusively from confirmed
+  `CALL` dependency edges without reopening source files or rerunning call
+  resolution;
+- group the same confirmed call edges into outbound `CALLS` and inbound
+  `CALLED BY` views while retaining their original source-location and symbol
+  provenance;
+- render confirmed caller-endpoint and callee-endpoint counts plus navigable
+  forward and reverse call relationships through `--trace`.
+- classify dynamically computed Python call targets as callback-parameter,
+  subscript-selected, `getattr`-result, returned-callable, or other dynamic
+  evidence while preserving their uncertain status;
+- distinguish runtime callback parameters with no matching internal candidate
+  from parameters that actually shadow an internal call candidate;
+- render dynamic-call kinds through `--trace` without allowing those uncertain
+  relationships into confirmed `CALL` dependency edges or caller/callee
+  indexes.
+- positively confirm stable two-part module-attribute calls such as
+  `worker.module_execute()` when the receiver is a stable resolved internal
+  module import and the requested member is one stable top-level target;
+- positively confirm stable two-part `Class.method(...)` calls for direct
+  same-file top-level classes and directly imported internal classes when the
+  class and method bindings satisfy the conservative static proof;
+- retain `INTERNAL_MODULE_ATTRIBUTE_BINDING`,
+  `SAME_FILE_CLASS_ATTRIBUTE_BINDING`, and
+  `INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING` provenance on those confirmed
+  attribute relationships;
+- refuse positive explicit module/class attribute proof when recognized
+  caller-side or target-side mutation makes the binding uncertain, while
+  keeping inheritance and explicit class keywords such as metaclasses outside
+  those C5I class-member proofs;
+- positively confirm a narrow local constructor-instance pattern such as
+  `worker = Worker()` followed later by `worker.execute()` inside either a
+  direct top-level function or a direct method of a direct top-level class when
+  the zero-argument constructor call is already proven to resolve to one stable
+  internal class and every intervening direct statement is proven strictly
+  passive;
+- treat only `pass`, constant expression statements, and plain assignments to
+  non-receiver names whose values contain only constants, non-receiver loaded
+  names, tuples, or lists of those values as passive local-instance gap
+  statements;
+- retain `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` provenance on those confirmed
+  local instance-method relationships;
+- positively confirm conservative inherited-member lookup across a stable
+  linear single-base ancestry such as `Worker(Base)` → `Base(Root)` when every
+  hop uses exactly one plain-name base with no class keywords and each base is
+  either one stable same-file top-level class or one stable directly imported
+  internal class reached through a resolved `from ... import ...` binding,
+  including imported aliases;
+- resolve a supported inherited `Worker.execute(...)` call to the first stable
+  direct undecorated ancestor that actually declares the member, retaining
+  `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` or
+  `INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` according to the
+  receiver class's proven direct-base provenance;
+- extend the existing constructor-backed local-instance path so a proven
+  `worker = Worker()` may resolve `worker.execute()` to that same declaring
+  ancestor with `LOCAL_INSTANCE_INHERITED_METHOD_BINDING`, while preserving the
+  existing constructor/passive-gap and per-hop inheritance safety requirements;
+- extend the B2 subclass-owned direct-member proof with C5J-B4B across stable
+  multi-level linear ancestry entirely within one source file. When the child
+  declares the stable undecorated member, `Worker.execute(...)` targets
+  `Worker.execute` with `SAME_FILE_CLASS_ATTRIBUTE_BINDING`. Supported
+  constructor-backed `worker.execute()` retains
+  `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` only after every ancestor passes the
+  instance-dispatch safety checks. Imported-base subclass-owned paths remain
+  unconfirmed;
+- confirm C5J-B4C-A1 inherited `Class.method(...)` calls through exactly two
+  stable same-file root bases, selecting the first stable directly declared
+  undecorated method in base order. These class calls reuse
+  `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING`; constructor-backed instance
+  method calls through this multiple-inheritance shape stay unresolved;
+- extend B4C-A1 with C5J-B4C-A2 for two distinct, disjoint, stable same-file
+  linear base branches, each with only single-base ancestry. Inherited
+  `Class.method(...)` calls select the first stable direct undecorated
+  declaration in the left branch (including its ancestors), then the right
+  branch. This reuses `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` without
+  inferring constructor-backed multiple-inheritance instance-method calls;
+- reject general multiple-inheritance/C3 MRO shapes (including shared-ancestor
+  diamonds, imported multiple bases, and three-base cases), module-expression
+  bases, unstable imported-base bindings, class keywords such
+  as metaclasses, decorated or descriptor-backed members, competing bindings,
+  receiver/member or inheritance mutation, unsafe `__new__`, `__init__`, or
+  `__getattribute__` behavior, receiver rebinding/deletion/aliasing, intervening
+  calls or control flow, factory results, constructor arguments, receiver
+  parameters, nested-expression method calls, and deeper nested function scopes;
+- keep lexical `self.member()` calls and arbitrary instance calls such as
+  `service.execute()` unresolved when no supported constructor-binding proof
+  establishes the receiver type.
+
+## Language recognition
+
+Current language-recognition coverage is documented in
+`docs/public/language-support.md`.
+
+Language recognition is not parser support. Parser capability is tracked
+separately from recognition.
+
+Python currently has a semantic parser identified as `python-stdlib-ast`. It
+uses Python's standard-library AST without importing or executing target
+modules. Other registered languages remain recognition-only until a parser
+is implemented for them.
 
 ## Project Sniffer 1.0 scope
 
@@ -64,6 +292,15 @@ The stable 1.0 command is planned to support five analyzers:
 
 `--all` will run all stable static analyzers.
 
+`--docs` is intentionally separate from that analyzer set. It performs scoped
+documentation scans only for root-level `docs/public/` and `docs/private/`
+rather than requiring the canonical full-project analyzer manifest.
+
+Those scoped scans retain Project Sniffer configuration and output-directory
+safety rules but intentionally do not apply target-project `.gitignore`
+filtering. A Project Sniffer exclusion of `docs/private/` may be overridden
+only through the explicit one-run interactive confirmation described above.
+
 A deterministic `--impact` analyzer is planned after 1.0.
 
 ## Safety boundaries
@@ -82,25 +319,30 @@ Generated reports may contain proprietary source code, internal configuration,
 personal information, or other sensitive material. Review reports before
 sharing them.
 
-Secret-bearing files will receive stronger non-overridable handling as the
-security analyzer and shared scanner are introduced.
+The safe-reader boundary now includes filesystem containment, file-symlink
+refusal, regular-file checks, and an 8 MiB default per-file source-read ceiling.
+Recognized secret-bearing files still require stronger non-overridable exclusion
+before the stable `--secret` analyzer.
 
 ## Configuration direction
 
-Project Sniffer will distinguish between:
+The current development runtime distinguishes between:
 
 - built-in recommended ignores;
-- machine-local per-project preferences;
-- project-owned `.project-sniffer.toml` configuration.
+- one local private schema-version-1 per-project registry;
+- target-project `.gitignore` rules.
 
-The current `personal_ignores.json` format remains supported until its loader is
-migrated safely.
+The local private registry is
+`src/project_sniffer/resources/personal_ignores.json`.
 
-See:
+It is Git-ignored, excluded from package data, and read-only from Project
+Sniffer's perspective. The legacy global JSON shape and the former
+XDG/APPDATA personal-registry locations are no longer accepted by the current
+runtime.
 
-- `docs/public/architecture.md`
-- `docs/public/configuration.md`
-- `docs/public/ignore-rules.md`
+Target-project `.project-sniffer.toml`, explicit `--config`, and a final
+installed-user personal-configuration location remain planned rather than
+implemented.
 
 ## Contributing
 

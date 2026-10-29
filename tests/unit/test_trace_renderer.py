@@ -1,0 +1,939 @@
+from __future__ import annotations
+
+import unittest
+from pathlib import Path
+
+from project_sniffer.evidence import (
+    SourceEvidence,
+    SourceLanguage,
+)
+from project_sniffer.indexing import (
+    build_semantic_project_index,
+)
+from project_sniffer.reading import (
+    FileReadResult,
+    FileReadStatus,
+)
+from project_sniffer.scanning import (
+    ScannedFile,
+)
+from project_sniffer.tracing import (
+    build_dependency_graph,
+    render_dependency_graph,
+)
+
+
+class TraceRendererTests(
+    unittest.TestCase
+):
+    def evidence(
+        self,
+        relative_path: str,
+        content: str,
+    ) -> SourceEvidence:
+        scanned_file = ScannedFile(
+            absolute_path=(
+                Path("/tmp/project")
+                / relative_path
+            ),
+            relative_path=relative_path,
+        )
+
+        read_result = FileReadResult(
+            scanned_file=scanned_file,
+            status=FileReadStatus.TEXT,
+            content=content,
+            resolved_path=scanned_file.absolute_path,
+            size_bytes=len(
+                content.encode(
+                    "utf-8"
+                )
+            ),
+            is_symlink=False,
+        )
+
+        return SourceEvidence(
+            read_result=read_result,
+            language=SourceLanguage.PYTHON,
+        )
+
+    def test_renderer_preserves_confirmed_and_uncertain_evidence(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "from .worker import Worker\n"
+                        "import missing_dependency\n"
+                        "\n"
+                        "def build():\n"
+                        "    return Worker()\n"
+                        "\n"
+                        "def shadowed(Worker):\n"
+                        "    return Worker()\n"
+                    ),
+                ),
+                self.evidence(
+                    "pkg/worker.py",
+                    (
+                        "class Worker:\n"
+                        "    pass\n"
+                    ),
+                ),
+            )
+        )
+
+        graph = build_dependency_graph(
+            index
+        )
+
+        rendered = render_dependency_graph(
+            graph
+        )
+
+        self.assertIn(
+            "- Potential internal calls: 0",
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "[IMPORT] "
+                "`pkg/app.py` "
+                "→ `pkg/worker.py`"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::build` "
+                "→ "
+                "`pkg/worker.py::Worker`"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            "- Confirmed caller endpoints: 1",
+            rendered,
+        )
+
+        self.assertIn(
+            "- Confirmed callee endpoints: 1",
+            rendered,
+        )
+
+        self.assertIn(
+            "## Confirmed calls by caller",
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/app.py::build`\n"
+                "  - CALLS "
+                "`pkg/worker.py::Worker` "
+                "(line 5)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            "## Confirmed calls by callee",
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/worker.py::Worker`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::build` "
+                "(line 5)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            "- Shadowed calls: 1",
+            rendered,
+        )
+
+        self.assertIn(
+            "## Shadowed call candidates",
+            rendered,
+        )
+
+        self.assertIn(
+            "shadowed by `parameter`",
+            rendered,
+        )
+
+    def test_renderer_shows_confirmed_module_attribute_call(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "import pkg.worker "
+                        "as worker\n"
+                        "\n"
+                        "def run():\n"
+                        "    return "
+                        "worker.module_execute()\n"
+                    ),
+                ),
+                self.evidence(
+                    "pkg/worker.py",
+                    (
+                        "def module_execute():\n"
+                        "    return True\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::run` "
+                "→ "
+                "`pkg/worker.py::module_execute`"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/worker.py::module_execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::run` "
+                "(line 4)"
+            ),
+            rendered,
+        )
+
+
+    def test_renderer_shows_confirmed_imported_class_attribute_call(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "from .worker "
+                        "import Worker\n"
+                        "\n"
+                        "def run():\n"
+                        "    return "
+                        "Worker.execute(None)\n"
+                    ),
+                ),
+                self.evidence(
+                    "pkg/worker.py",
+                    (
+                        "class Worker:\n"
+                        "    def execute(self):\n"
+                        "        return True\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::run` "
+                "→ "
+                "`pkg/worker.py::Worker.execute`"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/worker.py::Worker.execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::run` "
+                "(line 4)"
+            ),
+            rendered,
+        )
+
+
+    def test_renderer_shows_confirmed_local_instance_method_call(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "class Worker:\n"
+                        "    def execute(self):\n"
+                        "        return True\n"
+                        "\n"
+                        "def run():\n"
+                        "    worker = Worker()\n"
+                        "    return worker.execute()\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::run` "
+                "→ "
+                "`pkg/app.py::Worker.execute`"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/app.py::Worker.execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::run` "
+                "(line 7)"
+            ),
+            rendered,
+        )
+
+
+    def test_renderer_shows_confirmed_direct_class_method_local_instance_call(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "class Worker:\n"
+                        "    def execute(self):\n"
+                        "        return True\n"
+                        "\n"
+                        "class Manager:\n"
+                        "    def run(self):\n"
+                        "        worker = Worker()\n"
+                        "        return worker.execute()\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::Manager.run` "
+                "→ "
+                "`pkg/app.py::Worker.execute`"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/app.py::Worker.execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::Manager.run` "
+                "(line 8)"
+            ),
+            rendered,
+        )
+
+
+    def test_renderer_shows_passive_gap_local_instance_call(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "class Worker:\n"
+                        "    def execute(self):\n"
+                        "        return True\n"
+                        "\n"
+                        "class Manager:\n"
+                        "    def run(self):\n"
+                        "        worker = Worker()\n"
+                        "        count = 10\n"
+                        "        label = \"ready\"\n"
+                        "        pass\n"
+                        "        return worker.execute()\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::Manager.run` "
+                "→ "
+                "`pkg/app.py::Worker.execute`"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/app.py::Worker.execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::Manager.run` "
+                "(line 11)"
+            ),
+            rendered,
+        )
+
+    def test_renderer_shows_shallow_two_root_inherited_calls(self) -> None:
+        source = (
+            "class Left:\n    def execute(self):\n        return True\n\n"
+            "class Right:\n    def execute(self):\n        return False\n\n"
+            "class Worker(Left, Right):\n    pass\n\n"
+            "class ReverseWorker(Right, Left):\n    pass\n\n"
+            "def class_call():\n    return Worker.execute(None)\n\n"
+            "def reverse_call():\n    return ReverseWorker.execute(None)\n\n"
+            "def instance_call():\n    worker = Worker()\n    return worker.execute()\n"
+        )
+        index = build_semantic_project_index((self.evidence("pkg/app.py", source),))
+        rendered = render_dependency_graph(build_dependency_graph(index))
+
+        required = (
+            "- Resolved internal calls: 3",
+            "- Unresolved calls: 1",
+            "- Confirmed caller endpoints: 3",
+            "- Confirmed callee endpoints: 3",
+            "- [CALL] `pkg/app.py::class_call` → `pkg/app.py::Left.execute` (line 16)",
+            "- [CALL] `pkg/app.py::reverse_call` → `pkg/app.py::Right.execute` (line 19)",
+            "- [CALL] `pkg/app.py::instance_call` → `pkg/app.py::Worker` (line 22)",
+            "`pkg/app.py::class_call`\n  - CALLS `pkg/app.py::Left.execute` (line 16)",
+            "`pkg/app.py::reverse_call`\n  - CALLS `pkg/app.py::Right.execute` (line 19)",
+            "`pkg/app.py::Left.execute`\n  - CALLED BY `pkg/app.py::class_call` (line 16)",
+            "`pkg/app.py::Right.execute`\n  - CALLED BY `pkg/app.py::reverse_call` (line 19)",
+            "- `pkg/app.py`:23 `worker.execute` (scope `instance_call`)",
+        )
+
+        for fragment in required:
+            self.assertIn(fragment, rendered)
+
+        self.assertEqual(
+            sum(line.startswith("- [CALL] ") for line in rendered.splitlines()),
+            3,
+        )
+        self.assertNotIn("`pkg/app.py::Worker.execute`", rendered)
+        self.assertNotIn("`pkg/app.py::ReverseWorker.execute`", rendered)
+
+    def test_renderer_shows_disjoint_linear_two_branch_calls(self) -> None:
+        source = (
+            "class LRoot:\n    def execute(self): return True\n"
+            "class Left(LRoot): pass\n"
+            "class RRoot:\n    def execute(self): return False\n"
+            "class Right(RRoot): pass\n"
+            "class Worker(Left, Right): pass\n"
+            "class ReverseWorker(Right, Left): pass\n"
+            "class Shared:\n    def execute(self): return True\n"
+            "class DL(Shared): pass\nclass DR(Shared): pass\n"
+            "class Diamond(DL, DR): pass\n"
+            "def left_call():\n    return Worker.execute(None)\n"
+            "def right_call():\n    return ReverseWorker.execute(None)\n"
+            "def diamond_call():\n    return Diamond.execute(None)\n"
+            "def instance_call():\n    worker = Worker()\n    return worker.execute()\n"
+        )
+        index = build_semantic_project_index(
+            (self.evidence("pkg/app.py", source),)
+        )
+        rendered = render_dependency_graph(
+            build_dependency_graph(index)
+        )
+
+        required = (
+            "- Resolved internal calls: 3",
+            "- Unresolved calls: 2",
+            "- Confirmed caller endpoints: 3",
+            "- Confirmed callee endpoints: 3",
+            "- [CALL] `pkg/app.py::left_call` → `pkg/app.py::LRoot.execute` (line 15)",
+            "- [CALL] `pkg/app.py::right_call` → `pkg/app.py::RRoot.execute` (line 17)",
+            "- [CALL] `pkg/app.py::instance_call` → `pkg/app.py::Worker` (line 21)",
+            "`pkg/app.py::left_call`\n  - CALLS `pkg/app.py::LRoot.execute` (line 15)",
+            "`pkg/app.py::right_call`\n  - CALLS `pkg/app.py::RRoot.execute` (line 17)",
+            "`pkg/app.py::LRoot.execute`\n  - CALLED BY `pkg/app.py::left_call` (line 15)",
+            "`pkg/app.py::RRoot.execute`\n  - CALLED BY `pkg/app.py::right_call` (line 17)",
+            "- `pkg/app.py`:19 `Diamond.execute` (scope `diamond_call`)",
+            "- `pkg/app.py`:22 `worker.execute` (scope `instance_call`)",
+        )
+
+        for fragment in required:
+            self.assertIn(fragment, rendered)
+
+        self.assertEqual(
+            sum(line.startswith("- [CALL] ") for line in rendered.splitlines()),
+            3,
+        )
+        self.assertNotIn("- [CALL] `pkg/app.py::diamond_call`", rendered)
+        self.assertNotIn(
+            "- [CALL] `pkg/app.py::instance_call` → `pkg/app.py::Worker.execute`",
+            rendered,
+        )
+        self.assertNotIn("`pkg/app.py::ReverseWorker.execute`", rendered)
+
+    def test_renderer_shows_same_file_deeper_subclass_owned_calls(self) -> None:
+        source = (
+            "class Root:\n    pass\n\n"
+            "class Mid(Root):\n    pass\n\n"
+            "class Base(Mid):\n    pass\n\n"
+            "class Worker(Base):\n"
+            "    def execute(self):\n        return True\n\n"
+            "def class_call():\n    return Worker.execute(None)\n\n"
+            "def instance_call():\n"
+            "    worker = Worker()\n    return worker.execute()\n"
+        )
+        index = build_semantic_project_index((self.evidence("pkg/app.py", source),))
+        rendered = render_dependency_graph(build_dependency_graph(index))
+
+        for text in (
+            "- Resolved internal calls: 3",
+            "- Confirmed caller endpoints: 2",
+            "- Confirmed callee endpoints: 2",
+            "- [CALL] `pkg/app.py::class_call` → `pkg/app.py::Worker.execute` (line 15)",
+            "- [CALL] `pkg/app.py::instance_call` → `pkg/app.py::Worker.execute` (line 19)",
+            "`pkg/app.py::class_call`\n  - CALLS `pkg/app.py::Worker.execute` (line 15)",
+            "`pkg/app.py::Worker.execute`\n"
+            "  - CALLED BY `pkg/app.py::class_call` (line 15)\n"
+            "  - CALLED BY `pkg/app.py::instance_call` (line 19)",
+        ):
+            self.assertIn(text, rendered)
+
+        for invented in ("Base.execute", "Mid.execute", "Root.execute"):
+            self.assertNotIn(f"`pkg/app.py::{invented}`", rendered)
+
+    def test_renderer_shows_same_file_one_hop_subclass_owned_calls(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "class Base:\n"
+                        "    pass\n"
+                        "\n"
+                        "class Worker(Base):\n"
+                        "    def execute(self):\n"
+                        "        return True\n"
+                        "\n"
+                        "def class_call():\n"
+                        "    return Worker.execute(None)\n"
+                        "\n"
+                        "def instance_call():\n"
+                        "    worker = Worker()\n"
+                        "    return worker.execute()\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            "- Resolved internal calls: 3",
+            rendered,
+        )
+
+        self.assertIn(
+            "- Confirmed caller endpoints: 2",
+            rendered,
+        )
+
+        self.assertIn(
+            "- Confirmed callee endpoints: 2",
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::class_call` "
+                "→ "
+                "`pkg/app.py::Worker.execute` "
+                "(line 9)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::instance_call` "
+                "→ "
+                "`pkg/app.py::Worker.execute` "
+                "(line 13)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/app.py::Worker.execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::class_call` "
+                "(line 9)\n"
+                "  - CALLED BY "
+                "`pkg/app.py::instance_call` "
+                "(line 13)"
+            ),
+            rendered,
+        )
+
+    def test_renderer_shows_same_file_one_hop_inherited_calls(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "class Base:\n"
+                        "    def execute(self):\n"
+                        "        return True\n"
+                        "\n"
+                        "class Worker(Base):\n"
+                        "    pass\n"
+                        "\n"
+                        "def class_call():\n"
+                        "    return Worker.execute(None)\n"
+                        "\n"
+                        "def instance_call():\n"
+                        "    worker = Worker()\n"
+                        "    return worker.execute()\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            "- Resolved internal calls: 3",
+            rendered,
+        )
+
+        self.assertIn(
+            "- Confirmed caller endpoints: 2",
+            rendered,
+        )
+
+        self.assertIn(
+            "- Confirmed callee endpoints: 2",
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::class_call` "
+                "→ "
+                "`pkg/app.py::Base.execute` "
+                "(line 9)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::instance_call` "
+                "→ "
+                "`pkg/app.py::Base.execute` "
+                "(line 13)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/app.py::Base.execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::class_call` "
+                "(line 9)\n"
+                "  - CALLED BY "
+                "`pkg/app.py::instance_call` "
+                "(line 13)"
+            ),
+            rendered,
+        )
+
+    def test_renderer_labels_dynamic_call_kinds(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "def run(callback, callbacks):\n"
+                        "    callback()\n"
+                        "    callbacks[0]()\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(
+                index
+            )
+        )
+
+        self.assertIn(
+            "- Dynamic calls: 2",
+            rendered,
+        )
+
+        self.assertIn(
+            "kind `callback_parameter`",
+            rendered,
+        )
+
+        self.assertIn(
+            "kind `subscript_selected`",
+            rendered,
+        )
+
+
+    def test_renderer_shows_imported_one_hop_inherited_calls(
+        self,
+    ) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/base.py",
+                    (
+                        "class Base:\n"
+                        "    def execute(self):\n"
+                        "        return True\n"
+                    ),
+                ),
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "from .base import Base\n"
+                        "\n"
+                        "class Worker(Base):\n"
+                        "    pass\n"
+                        "\n"
+                        "def class_call():\n"
+                        "    return Worker.execute(None)\n"
+                        "\n"
+                        "def instance_call():\n"
+                        "    worker = Worker()\n"
+                        "    return worker.execute()\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(index)
+        )
+
+        self.assertIn(
+            "- Resolved internal calls: 3",
+            rendered,
+        )
+
+        self.assertIn(
+            "- Confirmed caller endpoints: 2",
+            rendered,
+        )
+
+        self.assertIn(
+            "- Confirmed callee endpoints: 2",
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::class_call` "
+                "→ "
+                "`pkg/base.py::Base.execute` "
+                "(line 7)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::instance_call` "
+                "→ "
+                "`pkg/base.py::Base.execute` "
+                "(line 11)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/app.py::class_call`\n"
+                "  - CALLS "
+                "`pkg/base.py::Base.execute` "
+                "(line 7)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/base.py::Base.execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::class_call` "
+                "(line 7)\n"
+                "  - CALLED BY "
+                "`pkg/app.py::instance_call` "
+                "(line 11)"
+            ),
+            rendered,
+        )
+
+    def test_renderer_shows_deeper_imported_inherited_calls(self) -> None:
+        index = build_semantic_project_index(
+            (
+                self.evidence(
+                    "pkg/root.py",
+                    (
+                        "class Root:\n"
+                        "    def execute(self):\n"
+                        "        return True\n"
+                    ),
+                ),
+                self.evidence(
+                    "pkg/base.py",
+                    (
+                        "from .root import Root\n"
+                        "\n"
+                        "class Base(Root):\n"
+                        "    pass\n"
+                    ),
+                ),
+                self.evidence(
+                    "pkg/app.py",
+                    (
+                        "from .base import Base\n"
+                        "\n"
+                        "class Worker(Base):\n"
+                        "    pass\n"
+                        "\n"
+                        "def class_call():\n"
+                        "    return Worker.execute(None)\n"
+                        "\n"
+                        "def instance_call():\n"
+                        "    worker = Worker()\n"
+                        "    return worker.execute()\n"
+                    ),
+                ),
+            )
+        )
+
+        rendered = render_dependency_graph(
+            build_dependency_graph(index)
+        )
+
+        self.assertIn("- Resolved internal calls: 3", rendered)
+        self.assertIn("- Confirmed caller endpoints: 2", rendered)
+        self.assertIn("- Confirmed callee endpoints: 2", rendered)
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::class_call` "
+                "→ "
+                "`pkg/root.py::Root.execute` "
+                "(line 7)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "[CALL] "
+                "`pkg/app.py::instance_call` "
+                "→ "
+                "`pkg/root.py::Root.execute` "
+                "(line 11)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/app.py::class_call`\n"
+                "  - CALLS "
+                "`pkg/root.py::Root.execute` "
+                "(line 7)"
+            ),
+            rendered,
+        )
+
+        self.assertIn(
+            (
+                "`pkg/root.py::Root.execute`\n"
+                "  - CALLED BY "
+                "`pkg/app.py::class_call` "
+                "(line 7)\n"
+                "  - CALLED BY "
+                "`pkg/app.py::instance_call` "
+                "(line 11)"
+            ),
+            rendered,
+        )
+
+if __name__ == "__main__":
+    unittest.main()

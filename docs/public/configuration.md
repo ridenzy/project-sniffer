@@ -2,76 +2,91 @@
 
 ## Current configuration model
 
-The current runtime reads two JSON files:
+The installed CLI loads recommended ignore rules from the packaged resource
+`src/project_sniffer/resources/recommended_ignores.json`.
+
+For the current source-tree development runtime, the local private personal
+registry is resolved from
+`src/project_sniffer/resources/personal_ignores.json`.
+
+The personal registry is intentionally Git-ignored and excluded from package
+data. The loader reads it when present but never creates or modifies it.
+
+The current runtime no longer resolves personal configuration through
+`XDG_CONFIG_HOME`, `APPDATA`, or `~/.config`.
+
+This source-tree-local location is a development-stage policy. A final
+installed-user personal-configuration location remains to be designed before
+1.0.
+
+## Required personal-registry format
+
+Only schema version 1 is accepted.
+
+Example:
+
+    {
+        "schema_version": 1,
+        "projects": {
+            "example-project": {
+                "IGNORE_FOLDERS": [
+                    "storage",
+                    "coverage"
+                ],
+                "IGNORE_FILES": [
+                    "agents.json"
+                ]
+            }
+        }
+    }
+
+The old global shape is rejected because personal rules must be scoped to a
+project profile.
+
+If an older personal-ignore file still contains rules worth preserving, move
+those rules into explicit schema-version-1 project profiles before deleting
+the legacy file.
+
+## Project profile selection
+
+Project Sniffer resolves the target project before selecting personal rules.
+
+Matching specificity is:
 
 ```text
-recommended_ignores.json
-personal_ignores.json
+ROOT_PATH + ROOT_NAME
+ROOT_PATH
+ROOT_NAME
+profile ID matching the project root name
 ```
 
-Both currently use this shape:
+The most specific matching profile wins.
 
-```json
-{
-    "IGNORE_FOLDERS": [],
-    "IGNORE_FILES": []
-}
-```
+Profiles with the same matching specificity are treated as ambiguous and cause
+a configuration error rather than being selected arbitrarily.
 
-`main.py` merges the two lists before scanning.
+## Root-name aliases
 
-This legacy structure must remain unchanged until the configuration loader is
-migrated. Changing `personal_ignores.json` to the future schema before changing
-its consumer would silently disable the current personal ignore entries.
-
-## Planned machine-local per-project registry
-
-The future private `personal_ignores.json` will retain settings for more than
-one scanned project.
-
-Planned schema:
+A profile ID does not have to match the target directory when `ROOT_NAME` is
+provided:
 
 ```json
 {
     "schema_version": 1,
     "projects": {
-        "example-project": {
-            "IGNORE_FOLDERS": [
-                "storage",
-                "coverage"
-            ],
-            "IGNORE_FILES": [
-                "agents.json"
-            ]
+        "company-a-frontend": {
+            "ROOT_NAME": "frontend",
+            "IGNORE_FOLDERS": [],
+            "IGNORE_FILES": []
         }
     }
 }
 ```
 
-This file remains:
+## Root-path qualification
 
-```text
-machine-local
-Git-ignored
-not distributed with Project Sniffer
-```
-
-## Project selection
-
-The future loader will:
-
-1. resolve the requested project root;
-2. derive its root name;
-3. load the personal registry;
-4. select a matching project profile;
-5. merge the selected profile with the other configuration sources;
-6. construct final scan settings;
-7. begin scanning.
-
-A profile may later contain an optional root-path qualifier when multiple local
-projects share the same directory name.
-
-Example:
+When multiple local repositories share a directory name, `ROOT_PATH` can
+identify the intended repository:
 
 ```json
 {
@@ -87,13 +102,113 @@ Example:
 }
 ```
 
-Absolute local paths are acceptable inside this private Git-ignored registry,
-but they must not be copied into generated public documentation or uploadable
-reports.
+Absolute local paths are permitted inside this local private registry.
+
+They must not be copied into generated public examples or uploadable reports.
+
+## Root compatibility entry point
+
+The root-level:
+
+```text
+main.py
+```
+
+is now a positional compatibility bridge to the packaged application runtime.
+
+Both:
+
+```text
+sniff
+python3 main.py /path/to/project
+```
+
+use packaged recommended ignores, the local private schema-version-1 personal
+registry, and the same shared scanner.
+
+The repository-root legacy personal-ignore file and the former XDG/APPDATA
+locations are not authoritative for either current entry point.
+
+## Target-project `.gitignore`
+
+The shared scanner reads `.gitignore` files inside the target project.
+
+Nested `.gitignore` files apply relative to their own directory and can
+override matching parent `.gitignore` rules.
+
+This discovery layer is intentionally separate from Project Sniffer's own
+configuration precedence.
+
+Project Sniffer does not currently consume `.git/info/exclude` or user-global
+Git ignore configuration, because those machine-specific sources would make
+the same target project produce different scan manifests on different
+machines.
+
+Project Sniffer recommended and personal exclusions remain stronger than
+target `.gitignore` rules.
+
+Canonical analyzer scans apply this target-project `.gitignore` layer by
+default. `--minus-gitignore` disables only that layer for the current analyzer
+run; Project Sniffer recommended, personal, and active output-directory
+exclusions remain active.
+
+## Effect on `--docs`
+
+`--docs` has its own scoped documentation discovery path.
+
+When selected, Project Sniffer checks the root-level:
+
+```text
+docs/public/
+docs/private/
+```
+
+scopes independently.
+
+Each existing scope is scanned through the shared scanner with its
+project-relative documentation prefix, so Project Sniffer recommended and
+personal ignore rules continue to apply to files and nested directories inside
+that scope.
+
+Active Project Sniffer output-directory exclusion also remains active.
+
+Target-project `.gitignore` processing is deliberately disabled during these
+documentation-scoped scans. This is different from the canonical analyzer
+scan. In particular, a Git-ignored `docs/private/` directory can still be
+considered when the user explicitly requests `--docs`.
+
+The packaged recommended `IGNORE_FOLDERS` list includes the basename rule
+`private`, which excludes any directory with that name in ordinary project
+scans, including `docs/private/`. When `--docs` finds an existing, excluded
+`docs/private/` scope, the CLI warns that private or sensitive documentation
+may be included and asks:
+
+```text
+Generate the docs/private/ report? [y/N]:
+```
+
+`y` or `yes` approves a one-run override of that private-scope exclusion.
+
+`n`, `no`, an empty response, or an unavailable interactive response keeps the
+scope excluded. If a canonical private documentation report exists from an
+earlier approved run, declining the override removes that stale report.
+
+The confirmation does not edit `personal_ignores.json`, target `.gitignore`,
+or any target-project documentation. Other Project Sniffer ignore rules
+continue to participate in the scoped scan.
+
+The canonical outputs are:
+
+```text
+<project-name>-public-docs-report.md
+<project-name>-private-docs-report.md
+```
+
+A physically missing documentation scope produces no report for that scope.
 
 ## Planned project-owned configuration
 
-A target repository may later provide:
+A target project may later provide:
 
 ```text
 .project-sniffer.toml
@@ -101,19 +216,22 @@ A target repository may later provide:
 
 for project-owned scanning rules.
 
-That configuration is separate from the user's private personal registry.
+That configuration is separate from local private personal preferences and is
+not implemented by the current development runtime.
 
-## Planned precedence
+## Target precedence
 
-Highest priority first:
+The intended complete precedence remains, highest priority first:
 
 1. non-overridable Project Sniffer safety rules;
 2. command-line overrides;
 3. explicit `--config`;
-4. matching machine-local personal project profile;
+4. matching local private personal project profile;
 5. target-project `.project-sniffer.toml`;
 6. user-wide Project Sniffer configuration;
 7. built-in defaults.
 
-The non-overridable safety layer always wins for secret-bearing source-report
-exclusions and filesystem escape protection.
+Only the currently implemented layers participate today.
+
+Non-overridable safety rules will remain authoritative for secret-bearing
+source-report exclusions and filesystem escape protection.

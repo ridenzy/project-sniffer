@@ -8,33 +8,54 @@ target project.
 
 ## Current implementation
 
-The current implementation is intentionally small:
+Project Sniffer now has an installable package entry point:
 
 ```text
-main.py
-    |
-    +-- scanner.py
-    |
-    +-- architecture_builder.py
-    |
-    +-- report_builder.py
-    |
-    +-- utils.py
+sniff
+ |
+ +-- project_sniffer.cli
+       |
+       +-- project_sniffer.application
+             |
+             +-- project_sniffer.config
+             +-- project_sniffer.scanning
+             +-- project_sniffer.reading
+             +-- project_sniffer.evidence
+             +-- project_sniffer.parsing
+             +-- project_sniffer.indexing
+             +-- project_sniffer.tracing
+             +-- project_sniffer.architecture_builder
+             +-- project_sniffer.report_builder
+             +-- project_sniffer.docs_reporter
 ```
 
-Configuration currently comes from:
+The packaged analyzers currently support `--architecture`, `--report`, and
+`--trace`. `--docs` is additionally available as a separate documentation
+report capability for the root-level `docs/public/` and `docs/private/`
+scopes.
 
-```text
-recommended_ignores.json
-personal_ignores.json
-```
+The package also contains its recommended ignore configuration as a packaged
+resource.
 
-`main.py` currently resolves the configuration before it resolves the target
-project and then passes the merged ignore dictionary into the scanner,
-architecture builder, and report builder.
+The current source-tree development runtime may additionally read the local
+private schema-version-1 registry at
+`src/project_sniffer/resources/personal_ignores.json`. That file is
+Git-ignored and excluded from package data.
 
-The scanner and architecture builder currently walk the target project
-independently.
+The root-level `main.py` remains available as a positional compatibility entry
+point and delegates to `project_sniffer.application`.
+
+The packaged analyzers and root compatibility entry point consume the same
+configuration, shared scanner, and single scan manifest. Source-report and trace
+analysis also share the safe-reader and `SourceEvidence` path. Obsolete parallel
+flat runtime implementations have been removed so `src/project_sniffer/` is the
+single runtime authority.
+
+Canonical analyzer scans apply target-project `.gitignore` processing by
+default. `--minus-gitignore` disables only that target-project layer for the
+current analyzer run while Project Sniffer recommended, personal, and active
+output-directory exclusions remain active. Documentation-scoped scans continue
+to disable target-project `.gitignore` processing independently.
 
 ## Existing behavior to preserve
 
@@ -43,24 +64,24 @@ The package refactor must preserve:
 - directory pruning for ignored folders;
 - readable relative paths;
 - binary-file skipping;
+- bounded per-file source reading with explicit oversized-file classification;
 - unreadable-file tolerance;
 - control-character cleaning;
 - safe Markdown fencing;
 - architecture-tree generation;
 - source-report generation;
+- scoped Markdown reporting for root-level `docs/public/` and `docs/private/`;
 - clear terminal summaries.
 
 ## Known limitations in the current implementation
 
 The current code still has several deliberate migration targets:
 
-1. Positional `sys.argv` parsing.
-2. Incorrect handling of relative project paths.
-3. Multiple project-directory walks.
-4. Exact-name ignore matching rather than real glob matching.
-5. Working-directory-dependent configuration loading.
-6. Legacy DOCX dependencies still present in `requirements.txt`.
-7. No non-overridable secret-bearing source-report exclusions yet.
+1. Target-project `.project-sniffer.toml` and explicit `--config` are not
+   implemented yet.
+2. A final installed-user personal-configuration location is not implemented
+   yet; the current private registry is source-tree local.
+3. Non-overridable secret-bearing exclusions are not implemented yet.
 
 ## Target 1.0 analyzer surface
 
@@ -76,7 +97,10 @@ sniff
 
 `--all` will select all stable static analyzers.
 
-## Target shared scan pipeline
+## Current analysis and documentation pipelines
+
+The analyzer and documentation paths deliberately share reusable components
+without sharing the same discovery scope.
 
 ```text
 CLI parsing
@@ -85,25 +109,478 @@ Configuration resolution
     |
 Project-root validation
     |
-Immutable scan settings
+project_sniffer.application
     |
-Single project walk
+    +-- analyzer request
+    |       |
+    |       +-- canonical full-project ScanManifest
+    |               |
+    |               +-- architecture builder
+    |               |
+    |               +-- safe file reading
+    |                       |
+    |                       +-- FileReadResult
+    |                               |
+    |                               +-- SourceEvidence
+    |                                       |
+    |                                       +-- source report
+    |                                       |
+    |                                       +-- semantic parsing
+    |                                               |
+    |                                               +-- SemanticProjectIndex
+    |                                                       |
+    |                                                       +-- import resolution
+    |                                                       +-- call resolution
+    |                                                               |
+    |                                                               +-- DependencyGraph
+    |                                                                       |
+    |                                                                       +-- CallIndex
+    |                                                                       +-- trace renderer
     |
-Path classification and ignore policy
-    |
-Safe file reading
-    |
-Language parsers and detectors
-    |
-Shared project indexes
-    |
-Requested analyzers
-    |
-Markdown and JSON reporting
+    +-- --docs
+            |
+            +-- project_sniffer.docs_reporter
+                    |
+                    +-- docs/public/ scoped scan
+                    |
+                    +-- docs/private/ scoped scan
+                            |
+                            +-- optional one-run private-scope approval
+                    |
+                    +-- Project Sniffer ignore rules
+                    +-- active output exclusion
+                    +-- target .gitignore disabled
+                    |
+                    +-- safe file reading
+                            |
+                            +-- SourceEvidence
+                                    |
+                                    +-- Markdown report builder
+                                            |
+                                            +-- public docs report
+                                            +-- private docs report
 ```
 
-The architecture analyzer must eventually consume the shared scan manifest
-instead of performing a second directory walk.
+Architecture generation, source-report generation, and dependency-trace
+generation consume the canonical full-project manifest when their analyzers are
+selected.
+
+`--docs` does not require that manifest. A docs-only run inspects only the
+root-level documentation scopes through separate scoped calls to the shared
+scanner.
+
+Those documentation scans preserve project-relative Project Sniffer ignore
+semantics by applying the appropriate documentation-path prefix. Active output
+directory exclusion also remains in force.
+
+Target-project `.gitignore` processing is deliberately disabled for
+documentation-scoped scans. This allows explicit documentation reporting to
+see material such as `docs/private/` even when that directory is intentionally
+Git-ignored.
+
+Documentation files are not copied byte-for-byte. They pass through
+`project_sniffer.reading`, receive deterministic `SourceEvidence`, and are
+rendered by the shared Markdown report builder. Binary, oversized, unreadable,
+symlink, escaped-path, and other unsafe read outcomes therefore remain
+classified rather than copied into a report.
+
+Documentation scope paths themselves may not traverse symlinks, and canonical
+report destinations are validated before output is replaced or removed.
+
+When Project Sniffer configuration excludes `docs/private/`, the application
+requires explicit one-run confirmation before that private scope exclusion is
+overridden. Declining the override leaves the scope excluded and removes an
+existing stale canonical private report.
+
+## Source evidence and language recognition
+
+Readable source files retain their existing immutable `FileReadResult` evidence.
+
+`project_sniffer.evidence` adds semantic metadata around that object rather than
+duplicating source content or reopening files.
+
+`SourceLanguage` represents language identity only. Recognition does not imply
+that a parser exists.
+
+Path-recognition rules are owned by
+`project_sniffer.evidence.language_registry`. The registry records deterministic
+suffixes, special basenames, broad language categories, and intentionally
+unresolved ambiguous cases.
+
+Compound suffixes are evaluated longest-first. Exact case-sensitive suffix
+rules are evaluated before case-insensitive rules where the distinction is
+meaningful.
+
+See `language-support.md` for the current registry.
+
+## Semantic parsing
+
+`project_sniffer.parsing` normalizes import statements, call sites, and class, function, and async-function symbols.
+
+`project_sniffer.parsing` consumes existing `SourceEvidence`; it does not
+perform filesystem discovery or reopen target-project files.
+
+The parser registry currently supports Python through the standard-library
+`ast` parser identified as `python-stdlib-ast`. The parser normalizes import
+statements, call sites, and class, function, and async-function symbols.
+
+Unsupported languages and non-text or invalid evidence remain explicit parse outcomes.
+Syntax errors are recorded as parser evidence rather than causing target code
+to execute or the scan pipeline to fail.
+
+## Semantic project indexing
+
+`project_sniffer.indexing` consumes existing `SourceEvidence` through the parser
+dispatcher and constructs one immutable `SemanticProjectIndex`.
+
+The index retains every `ParsedSource`, including unsupported-language,
+non-text, invalid-text, and syntax-error outcomes. Only successfully parsed
+sources contribute flattened IndexedImport, IndexedSymbol, and IndexedCall records.
+
+Those indexed records retain their original parser evidence and source path,
+providing project-wide semantic evidence without another filesystem walk,
+without reopening source files, and without executing target-project code.
+
+The index is an evidence layer rather than a dependency resolver. Python import
+resolution and Python call resolution consume the shared index. The `--trace`
+analyzer renders both evidence classes. Confirmed internal imports become
+`IMPORT` edges, while positively proven internal calls become `CALL` edges.
+Potential, shadowed, ambiguous, unresolved, and dynamic call outcomes remain
+explicit evidence rather than inferred relationships.
+
+## Python import resolution
+
+`project_sniffer.tracing.python.imports` consumes the shared
+`SemanticProjectIndex` to resolve normalized Python import evidence against
+source files already present in the project evidence.
+
+Resolution does not import target modules, execute target-project code, inspect
+the target interpreter environment, install dependencies, or reopen project
+source files.
+
+The initial resolver distinguishes resolved internal imports, unresolved
+imports, ambiguous internal candidates, and invalid relative imports. An
+unresolved import is intentionally not labelled external because the available
+static evidence cannot yet prove whether it represents a standard-library,
+third-party, missing, dynamically configured, or otherwise unresolved module.
+
+The current path policy recognizes modules rooted directly in the project and
+the conventional top-level `src/` Python source layout. Additional source-root
+discovery from packaging metadata remains future work.
+
+Import resolution feeds dependency-graph construction. Confirmed internal
+imports become `IMPORT` dependency edges. Python call resolution consumes those
+resolved import bindings separately and may create `CALL` edges only when its
+own positive static proof succeeds.
+
+## Python call candidate resolution
+
+`project_sniffer.tracing.python.calls` consumes the shared
+`SemanticProjectIndex` together with the existing Python import resolutions.
+
+`project_sniffer.tracing.python.inheritance` provides the deliberately narrow
+structural inheritance primitive used by the call resolver. It recognizes one
+direct plain-name base from an already-read Python `ClassDef` at a time; it does
+not perform independent symbol resolution, MRO computation, or binding-stability
+proof. `project_sniffer.tracing.python.calls` owns those responsibilities and
+may compose the direct-base primitive across a confirmed linear ancestry.
+
+The current resolver handles direct-name calls conservatively and also supports
+a narrow two-part attribute-call subset. Direct-name candidates can come from
+same-file top-level symbols or already-resolved internal
+`from ... import ...` bindings, including imported aliases.
+
+For a two-part `receiver.member()` call, C5I can additionally reason about two
+explicit receiver families: a stable resolved internal module import, or a
+stable class symbol backed by either a same-file top-level class or a directly
+imported internal class.
+
+C5J-A1 adds one deliberately narrow local-instance receiver family. Inside a
+direct top-level function, an immediately preceding direct assignment such as
+`worker = Worker()` may establish the receiver type for a following direct
+`worker.execute()` call when `Worker()` is a zero-argument constructor call
+already positively resolved to one stable internal class. The requested member
+must then satisfy the existing stable class-member proof.
+
+C5J-A2 extends that same constructor-backed receiver proof to a direct method of
+a direct top-level class. This is still explicit constructor provenance rather
+than general type inference: lexical `self.member()` calls remain unresolved
+because method scope alone does not prove the runtime receiver type, and deeper
+nested function scopes remain outside the current proof.
+
+C5J-A3 relaxes only the immediate-adjacency requirement of that same proof. A
+constructor assignment may now be reached across zero or more intervening direct
+statements when every such statement satisfies a deliberately narrow passive
+AST whitelist. The accepted forms are `pass`, constant expression statements,
+and plain assignments to non-receiver names whose values contain only
+constants, non-receiver loaded names, tuples, or lists of those values.
+Receiver-dependent assignments, rebinding, deletion, aliasing, calls, control
+flow, and other unmodelled statement shapes stop the proof rather than being
+treated as harmless.
+
+C5J-B1 adds a separate conservative inheritance-aware path. A stable same-file
+direct top-level child class may inherit one requested method from one stable
+same-file direct top-level base when the child has exactly one plain-name base,
+the base itself has no further base or class keywords, the child does not
+define or mutate the requested member, and the requested base member satisfies
+the existing stable direct-method proof.
+
+C5J-B3B extends that inherited-member path without adding a parallel
+inheritance resolver. The child still requires exactly one plain-name direct
+base and no class keywords, but that base may now be one stable directly
+imported internal class reached through one proven `from ... import ...` binding,
+including an imported alias. The import must be available when the child class
+is defined and remain stable. The same direct-base shape and mutation guards are
+reused across the child and base source trees.
+
+C5J-B4A composes those direct-base proofs across a stable linear ancestry. At
+every hop the current class must have either no base or exactly one plain-name
+base with no class keywords, and that base must resolve as one stable same-file
+or directly imported internal top-level class. Cycles, unstable hops, competing
+member bindings, and recognized base/member mutation stop the proof. Inherited
+lookup walks the confirmed ancestry in order and resolves only when it reaches
+the first ancestor with one stable direct undecorated declaration of the
+requested member.
+
+For class-receiver calls, the existing
+`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` and
+`INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` proof kinds are reused;
+the proof provenance reflects the receiver class's proven direct-base path while
+the target is the actual declaring ancestor member. For local
+constructor-backed instance calls, the existing A1/A2/A3 constructor provenance
+is still required and `LOCAL_INSTANCE_INHERITED_METHOD_BINDING` resolves to the
+same declaring ancestor, including when that ancestor lives in another source
+file.
+
+C5J-B2 established the complementary same-file subclass-owned case for one
+inheritance hop. C5J-B4B extends that direct-member proof across stable linear
+single-base ancestry of multiple levels when every class is in the same file.
+If `Worker` itself declares the stable undecorated method, `Worker.execute(...)`
+still targets `Worker.execute` with `SAME_FILE_CLASS_ATTRIBUTE_BINDING` rather
+than inventing an inherited target. A supported constructor-backed
+`worker.execute()` retains `LOCAL_INSTANCE_CONSTRUCTOR_BINDING` only if every
+ancestor passes the instance-dispatch safety checks. No new proof kind is
+introduced, and imported-base subclass-owned paths remain unconfirmed.
+
+C5J-B4C-A1 adds a separate shallow inherited *class-receiver* lookup for
+exactly two distinct stable same-file bases that have no bases of their own.
+It checks both bases and their requested method bindings conservatively,
+selecting the first stable direct undecorated declaration in base order.
+`Worker(Left, Right)` may therefore resolve `Worker.execute(...)` to
+`Left.execute`, and reversing the bases may resolve to `Right.execute`.
+The existing `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` proof is reused;
+no full C3 linearization, imported multi-base lookup, or multiple-inheritance
+instance-method proof is introduced. A separately confirmed `Worker()`
+constructor call is not proof of `worker.execute()` for this shape.
+
+C5J-B4C-A2 extends this class-receiver path to two distinct, disjoint,
+stable same-file linear branches. Each direct base may have its own proven
+single-base ancestry; no ancestor may appear in both branches. Lookup checks
+the entire left branch before the right branch, using the existing stable
+binding and direct-member guards. For `class Worker(Left, Right)`, a
+confirmed `Worker.execute(...)` call resolves to the first stable direct
+undecorated declaring method in that bounded order. Reversing the direct
+bases reverses branch precedence. The path still reuses
+`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` and does not establish
+arbitrary C3 MRO, shared-ancestor diamonds, imported multiple bases,
+three-base classes, or constructor-backed multiple-inheritance
+instance-method dispatch.
+
+Call resolution still distinguishes potential internal, unresolved, ambiguous,
+shadowed, resolved-internal, and dynamic outcomes. Arbitrary instance receivers
+such as `service.execute()` and attribute chains outside the narrow proven
+receiver forms remain unresolved unless stronger binding or type evidence
+becomes available.
+
+Dynamically computed targets remain explicitly uncertain, but the current
+Python evidence model now preserves several syntax- and binding-derived dynamic
+kinds: callback parameters, subscript-selected callables, `getattr` results,
+returned callables, and other dynamic targets. These classifications describe
+why a target is dynamic; they do not prove a concrete runtime callee.
+
+A potential internal call is not a confirmed call dependency. Python permits
+parameters, assignments, rebinding, closures, and other scope behaviour that can
+shadow an apparently matching symbol. Binding and shadowing analysis is therefore
+required before potential call candidates can safely become confirmed call
+edges.
+
+The call resolver now also uses Python's compiler-generated symbol-table
+information from the already-read source text. It does not reopen source files
+or execute target code.
+
+Named function/class scopes can therefore reject candidate targets when the
+compiler identifies the called name as a parameter, assignment, local import,
+nonlocal, free closure binding, or other local binding.
+
+These outcomes are recorded as `SHADOWED`. Shadowed candidates remain
+non-confirmed evidence; other candidates may become confirmed only when one of
+the resolver's explicit positive static proofs succeeds.
+
+A direct-name call through a function parameter is treated differently when no
+internal candidate exists. In that case the parameter is runtime-provided
+callable evidence and is retained as a dynamic `callback_parameter` call. If a
+same-file or imported internal candidate exists under that name, the parameter
+continues to be recorded as shadowing that candidate instead.
+
+The resolver currently has nine narrow positive proof kinds.
+
+The first two cover direct-name calls.
+
+`INTERNAL_IMPORT_BINDING` confirms a direct-name call backed by one resolved
+internal `from ... import ...` binding when compiler symbol-table evidence shows
+the binding is imported and not reassigned, parameter-bound, nonlocal, or free.
+Binding-order checks prevent an import that occurs too late for the relevant
+call site from proving the relationship.
+
+`SAME_FILE_STABLE_BINDING` confirms a stable same-file direct-name binding. The
+candidate must resolve uniquely to one direct top-level function,
+async-function, or class definition whose recognized module binding remains
+stable.
+
+C5I adds three attribute-call proofs.
+
+`INTERNAL_MODULE_ATTRIBUTE_BINDING` confirms a two-part call such as
+`worker.module_execute()` when `worker` is one stable resolved internal module
+import and `module_execute` is one stable top-level target in that module.
+
+`SAME_FILE_CLASS_ATTRIBUTE_BINDING` confirms a two-part
+`Class.method(...)` call when the class is one stable direct same-file
+top-level class and the requested member is one stable direct undecorated
+method.
+
+`INTERNAL_IMPORTED_CLASS_ATTRIBUTE_BINDING` applies the same method proof to a
+class reached through one stable direct internal import.
+
+The original C5I direct class-attribute proof deliberately rejects classes with
+inheritance or class keywords such as an explicit metaclass. C5J-B1 introduces
+the separate same-file inherited-member path, C5J-B3B allows a stable directly
+imported plain-name base, and C5J-B4A composes those same direct-base proofs
+across a stable linear ancestry. None of these paths weakens the original
+direct-member proof. Decorated or rebound methods, caller-side direct attribute
+assignment, recognized `setattr()` mutation, and other unstable binding shapes
+also prevent positive proof.
+
+C5J-A1 adds one local constructor-instance proof, C5J-A2 extends the caller
+scope accepted by that same proof, and C5J-A3 permits the constructor provenance
+to survive a bounded sequence of strictly passive intervening statements.
+
+`LOCAL_INSTANCE_CONSTRUCTOR_BINDING` confirms a narrow two-part instance method
+call such as `worker.execute()` when either a direct top-level function or a
+direct method of a direct top-level class contains an earlier direct assignment
+`worker = Worker()`, the constructor has no arguments or keywords, that
+constructor call has already been positively resolved to one internal class,
+and every direct statement between construction and the method call satisfies
+the passive-gap proof. The class and requested method must also satisfy the
+existing stable class/member checks.
+
+The passive-gap proof accepts only `pass`, constant expression statements, and
+plain assignments to non-receiver names whose values are composed only of
+constants, non-receiver loaded names, tuples, or lists of those values.
+
+C5J-B1/B3B/B4A and the bounded C5J-B4C-A1/A2 paths reuse the existing
+three inheritance-specific proof kinds.
+
+`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` confirms supported inherited
+`Worker.execute(...)` calls with proven same-file base bindings. Its target is
+the actual stable declaring method, not a synthetic `Worker.execute`: either
+the first declaration on a confirmed linear ancestry, B4C-A1's shallow
+two-root-base order, or B4C-A2's two disjoint same-file linear branches.
+
+`INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` provides the
+corresponding class-receiver proof when the receiver class's direct base is
+established through one stable resolved internal `from ... import ...` binding,
+including an imported alias. The declaring member may be farther up the same
+confirmed linear ancestry and may live in another source file.
+
+`LOCAL_INSTANCE_INHERITED_METHOD_BINDING` applies the same inherited-member
+lookup to the existing constructor-backed local receiver path. The zero-argument
+constructor must already be positively resolved, A1/A2/A3 receiver-binding and
+passive-gap requirements still apply, and every confirmed ancestry class must
+satisfy the relevant `__new__`, `__init__`, and `__getattribute__` safety
+checks.
+
+The local-instance proof deliberately does not perform general type inference.
+Factory results, constructor arguments, receiver parameters including lexical
+`self`, receiver rebinding, deletion, aliasing, receiver-dependent assignments,
+intervening calls or control flow, nested-expression method calls, deeper nested
+function scopes, unsupported inheritance shapes, class keywords, unsafe
+`__new__`, `__init__`, or `__getattribute__` bindings, and recognized
+receiver/member or inheritance mutation prevent this proof from confirming the
+relationship. Unknown receivers such as `service.execute()` therefore remain
+unresolved.
+
+The resolver uses the already-read Python AST and compiler symbol tables for
+these checks; it does not execute target code or reopen source files.
+
+Successful proofs produce `RESOLVED_INTERNAL`. This is static binding evidence,
+not a guarantee that the call executes at runtime.
+
+`RESOLVED_INTERNAL` calls become `CALL` dependency edges. Candidates that do
+not satisfy positive proof remain potential, shadowed, ambiguous, unresolved,
+or dynamic evidence as appropriate.
+
+General multiple inheritance/C3 MRO (including shared-ancestor diamonds,
+imported multiple bases, and three-base classes), module-expression or other
+dynamically expressed bases, unsupported class keywords, descriptors/decorated
+inherited members, and unstable imported-base bindings remain unconfirmed
+outside the bounded B4C-A1/A2 class-receiver paths.
+
+C5J-B4B broadens subclass-owned direct-member proof only across
+stable same-file linear ancestry; imported-base subclass-owned cases remain
+unconfirmed. `super()` semantics remain a later C5J stage.
+
+## Dependency graph
+
+`project_sniffer.tracing.dependency_graph` converts confirmed internal import
+and call resolutions into immutable dependency edges.
+
+Every parsed source path remains represented as a graph node, including files
+that have no dependency edges. The graph retains the complete import-resolution
+and call-resolution collections so uncertain semantic evidence remains visible
+without being converted into confirmed relationships.
+
+Only `RESOLVED_INTERNAL` imports and calls currently become dependency edges:
+
+- resolved imports become `IMPORT` edges;
+- positively proven resolved calls become `CALL` edges.
+
+Potential, shadowed, ambiguous, unresolved, and dynamic calls do not become
+confirmed edges.
+
+Import edges retain source path, target path, source line, enclosing scope, and
+their original `ImportResolution`. Call edges additionally retain the confirmed
+target symbol and their original `CallResolution` proof evidence.
+
+The dependency graph remains the authoritative confirmed-relationship layer.
+The trace renderer consumes the graph directly for raw dependency rendering and
+also derives confirmed caller/callee navigation from its `CALL` edges. Broader
+trace relationships remain later stages.
+
+## Confirmed call indexing
+
+`project_sniffer.tracing.call_index` derives deterministic forward and reverse
+call views from an existing `DependencyGraph`.
+
+The index does not parse source text, reopen project files, rerun import
+resolution, or rerun Python call resolution. It consumes only dependency edges
+already present in the graph.
+
+Only edges whose kind is `CALL` participate in the index. Because uncertain
+potential, shadowed, ambiguous, unresolved, and dynamic call outcomes do not
+become dependency edges, they cannot enter the confirmed caller/callee index.
+
+Each confirmed call edge is grouped in two directions:
+
+- the outbound index groups edges by caller source path and caller scope;
+- the inbound index groups the same edges by callee source path and confirmed
+  target symbol.
+
+Both views retain the original immutable `DependencyEdge` objects rather than
+creating a second relationship-evidence type.
+
+The trace renderer exposes these derived relationships as `CALLS` and
+`CALLED BY` sections and reports the number of confirmed caller and callee
+endpoints separately from the number of confirmed call edges.
 
 ## Core safety model
 
@@ -120,12 +597,14 @@ The 1.0 core must:
 
 ## Configuration ownership
 
-Three configuration classes are planned:
+The current and planned configuration classes are:
 
 1. Built-in defaults and recommended ignores.
-2. Machine-local user preferences, including per-project private ignores.
+2. Local private per-project preferences for the current source-tree runtime.
 3. Target-project `.project-sniffer.toml` configuration.
+4. A future installed-user personal-configuration location.
 
-The machine-local personal registry is intentionally not committed to Git.
+The current private registry is intentionally not committed to Git or included
+as package data.
 
 See `configuration.md`.

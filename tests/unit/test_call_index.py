@@ -1,0 +1,1112 @@
+from __future__ import annotations
+
+import unittest
+from pathlib import Path
+
+from project_sniffer.evidence import (
+    SourceEvidence,
+    SourceLanguage,
+)
+from project_sniffer.indexing import (
+    build_semantic_project_index,
+)
+from project_sniffer.reading import (
+    FileReadResult,
+    FileReadStatus,
+)
+from project_sniffer.scanning import (
+    ScannedFile,
+)
+from project_sniffer.tracing import (
+    CallEndpoint,
+    CallResolutionStatus,
+    DependencyKind,
+    build_call_index,
+    build_dependency_graph,
+)
+
+
+class CallIndexTests(
+    unittest.TestCase
+):
+    def evidence(
+        self,
+        relative_path: str,
+        content: str,
+    ) -> SourceEvidence:
+        scanned_file = ScannedFile(
+            absolute_path=(
+                Path("/tmp/project")
+                / relative_path
+            ),
+            relative_path=relative_path,
+        )
+
+        read_result = FileReadResult(
+            scanned_file=scanned_file,
+            status=FileReadStatus.TEXT,
+            content=content,
+            resolved_path=(
+                scanned_file.absolute_path
+            ),
+            size_bytes=len(
+                content.encode(
+                    "utf-8"
+                )
+            ),
+            is_symlink=False,
+        )
+
+        return SourceEvidence(
+            read_result=read_result,
+            language=SourceLanguage.PYTHON,
+        )
+
+    def graph(
+        self,
+        *evidence: SourceEvidence,
+    ):
+        index = (
+            build_semantic_project_index(
+                evidence
+            )
+        )
+
+        return build_dependency_graph(
+            index
+        )
+
+    def test_confirmed_calls_build_outbound_and_inbound_indexes(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "from .worker import Worker\n"
+                    "first = Worker()\n"
+                    "\n"
+                    "def build():\n"
+                    "    return Worker()\n"
+                ),
+            ),
+            self.evidence(
+                "pkg/worker.py",
+                (
+                    "class Worker:\n"
+                    "    pass\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(
+            graph
+        )
+
+        self.assertEqual(
+            len(
+                graph.edges
+            ),
+            3,
+        )
+
+        self.assertEqual(
+            tuple(
+                entry.endpoint
+                for entry
+                in call_index.outbound
+            ),
+            (
+                CallEndpoint(
+                    path="pkg/app.py",
+                    symbol=None,
+                ),
+                CallEndpoint(
+                    path="pkg/app.py",
+                    symbol="build",
+                ),
+            ),
+        )
+
+        self.assertEqual(
+            tuple(
+                edge.line
+                for entry
+                in call_index.outbound
+                for edge
+                in entry.edges
+            ),
+            (
+                2,
+                5,
+            ),
+        )
+
+        self.assertTrue(
+            all(
+                edge.kind
+                is DependencyKind.CALL
+                for entry
+                in call_index.outbound
+                for edge
+                in entry.edges
+            )
+        )
+
+        self.assertEqual(
+            len(
+                call_index.inbound
+            ),
+            1,
+        )
+
+        self.assertEqual(
+            call_index.inbound[0].endpoint,
+            CallEndpoint(
+                path="pkg/worker.py",
+                symbol="Worker",
+            ),
+        )
+
+        self.assertEqual(
+            tuple(
+                edge.line
+                for edge
+                in call_index.inbound[0].edges
+            ),
+            (
+                2,
+                5,
+            ),
+        )
+
+        self.assertIs(
+            call_index.inbound[0].edges[0],
+            call_index.outbound[0].edges[0],
+        )
+
+    def test_module_attribute_call_enters_call_index(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "import pkg.worker as worker\n"
+                    "\n"
+                    "def run():\n"
+                    "    return "
+                    "worker.module_execute()\n"
+                ),
+            ),
+            self.evidence(
+                "pkg/worker.py",
+                (
+                    "def module_execute():\n"
+                    "    return True\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(
+            graph
+        )
+
+        self.assertEqual(
+            tuple(
+                entry.endpoint
+                for entry
+                in call_index.outbound
+            ),
+            (
+                CallEndpoint(
+                    path="pkg/app.py",
+                    symbol="run",
+                ),
+            ),
+        )
+
+        self.assertEqual(
+            tuple(
+                entry.endpoint
+                for entry
+                in call_index.inbound
+            ),
+            (
+                CallEndpoint(
+                    path="pkg/worker.py",
+                    symbol="module_execute",
+                ),
+            ),
+        )
+
+
+    def test_class_attribute_call_enters_call_index(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    return "
+                    "Worker.execute(None)\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(
+            graph
+        )
+
+        self.assertEqual(
+            tuple(
+                entry.endpoint
+                for entry
+                in call_index.outbound
+            ),
+            (
+                CallEndpoint(
+                    path="pkg/app.py",
+                    symbol="run",
+                ),
+            ),
+        )
+
+        self.assertEqual(
+            tuple(
+                entry.endpoint
+                for entry
+                in call_index.inbound
+            ),
+            (
+                CallEndpoint(
+                    path="pkg/app.py",
+                    symbol="Worker.execute",
+                ),
+            ),
+        )
+
+
+    def test_local_instance_method_call_enters_call_index(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def run():\n"
+                    "    worker = Worker()\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(
+            graph
+        )
+
+        run_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="run",
+            )
+        )
+
+        self.assertIn(
+            "Worker.execute",
+            tuple(
+                edge.target_symbol
+                for edge in run_entry.edges
+            ),
+        )
+
+        method_entry = next(
+            entry
+            for entry in call_index.inbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="Worker.execute",
+            )
+        )
+
+        self.assertEqual(
+            len(method_entry.edges),
+            1,
+        )
+
+        self.assertEqual(
+            method_entry.edges[0].scope,
+            "run",
+        )
+
+        self.assertEqual(
+            method_entry.edges[0].line,
+            7,
+        )
+
+
+    def test_direct_class_method_local_instance_call_enters_call_index(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "class Manager:\n"
+                    "    def run(self):\n"
+                    "        worker = Worker()\n"
+                    "        return worker.execute()\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(
+            graph
+        )
+
+        run_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="Manager.run",
+            )
+        )
+
+        self.assertIn(
+            "Worker.execute",
+            tuple(
+                edge.target_symbol
+                for edge in run_entry.edges
+            ),
+        )
+
+        method_entry = next(
+            entry
+            for entry in call_index.inbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="Worker.execute",
+            )
+        )
+
+        self.assertEqual(
+            len(method_entry.edges),
+            1,
+        )
+
+        self.assertEqual(
+            method_entry.edges[0].scope,
+            "Manager.run",
+        )
+
+        self.assertEqual(
+            method_entry.edges[0].line,
+            8,
+        )
+
+
+    def test_passive_gap_local_instance_call_enters_call_index(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Worker:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "class Manager:\n"
+                    "    def run(self):\n"
+                    "        worker = Worker()\n"
+                    "        count = 10\n"
+                    "        label = \"ready\"\n"
+                    "        pass\n"
+                    "        return worker.execute()\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(
+            graph
+        )
+
+        run_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="Manager.run",
+            )
+        )
+
+        self.assertIn(
+            "Worker.execute",
+            tuple(
+                edge.target_symbol
+                for edge in run_entry.edges
+            ),
+        )
+
+        method_entry = next(
+            entry
+            for entry in call_index.inbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="Worker.execute",
+            )
+        )
+
+        self.assertEqual(
+            len(method_entry.edges),
+            1,
+        )
+
+        self.assertEqual(
+            method_entry.edges[0].line,
+            11,
+        )
+
+
+    def test_uncertain_calls_do_not_enter_call_index(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "def helper():\n"
+                    "    return True\n"
+                    "\n"
+                    "helper = replacement\n"
+                    "\n"
+                    "def run():\n"
+                    "    return helper()\n"
+                ),
+            ),
+        )
+
+        self.assertEqual(
+            len(
+                graph.call_resolutions
+            ),
+            1,
+        )
+
+        self.assertIs(
+            graph.call_resolutions[0].status,
+            (
+                CallResolutionStatus
+                .POTENTIAL_INTERNAL
+            ),
+        )
+
+        self.assertEqual(
+            graph.edges,
+            (),
+        )
+
+        call_index = build_call_index(
+            graph
+        )
+
+        self.assertEqual(
+            call_index.outbound,
+            (),
+        )
+
+        self.assertEqual(
+            call_index.inbound,
+            (),
+        )
+
+    def test_shallow_two_root_inherited_calls_enter_call_index(self) -> None:
+        source = (
+            "class Left:\n    def execute(self):\n        return True\n\n"
+            "class Right:\n    def execute(self):\n        return False\n\n"
+            "class Worker(Left, Right):\n    pass\n\n"
+            "class ReverseWorker(Right, Left):\n    pass\n\n"
+            "def class_call():\n    return Worker.execute(None)\n\n"
+            "def reverse_call():\n    return ReverseWorker.execute(None)\n\n"
+            "def instance_call():\n    worker = Worker()\n    return worker.execute()\n"
+        )
+        index = build_call_index(self.graph(self.evidence("pkg/app.py", source)))
+        outbound = {entry.endpoint.symbol: entry for entry in index.outbound}
+        inbound = {entry.endpoint.symbol: entry for entry in index.inbound}
+
+        self.assertEqual(set(outbound), {"class_call", "reverse_call", "instance_call"})
+        self.assertEqual(set(inbound), {"Left.execute", "Right.execute", "Worker"})
+
+        for caller, target, line in (
+            ("class_call", "Left.execute", 16),
+            ("reverse_call", "Right.execute", 19),
+            ("instance_call", "Worker", 22),
+        ):
+            self.assertEqual(outbound[caller].endpoint, CallEndpoint(path="pkg/app.py", symbol=caller))
+            self.assertEqual(inbound[target].endpoint, CallEndpoint(path="pkg/app.py", symbol=target))
+            self.assertEqual(
+                tuple((edge.target_symbol, edge.line) for edge in outbound[caller].edges),
+                ((target, line),),
+            )
+            self.assertEqual(
+                tuple((edge.scope, edge.line) for edge in inbound[target].edges),
+                ((caller, line),),
+            )
+
+    def test_disjoint_linear_two_branch_calls_enter_call_index(self) -> None:
+        source = (
+            "class LRoot:\n    def execute(self): return True\n"
+            "class Left(LRoot): pass\n"
+            "class RRoot:\n    def execute(self): return False\n"
+            "class Right(RRoot): pass\n"
+            "class Worker(Left, Right): pass\n"
+            "class ReverseWorker(Right, Left): pass\n"
+            "class Shared:\n    def execute(self): return True\n"
+            "class DL(Shared): pass\nclass DR(Shared): pass\n"
+            "class Diamond(DL, DR): pass\n"
+            "def left_call():\n    return Worker.execute(None)\n"
+            "def right_call():\n    return ReverseWorker.execute(None)\n"
+            "def diamond_call():\n    return Diamond.execute(None)\n"
+            "def instance_call():\n    worker = Worker()\n    return worker.execute()\n"
+        )
+        index = build_call_index(
+            self.graph(self.evidence("pkg/app.py", source))
+        )
+
+        outbound = {item.endpoint.symbol: item for item in index.outbound}
+        inbound = {item.endpoint.symbol: item for item in index.inbound}
+
+        self.assertEqual(
+            set(outbound),
+            {"left_call", "right_call", "instance_call"},
+        )
+        self.assertEqual(
+            set(inbound),
+            {"LRoot.execute", "RRoot.execute", "Worker"},
+        )
+
+        for caller, callee, line in (
+            ("left_call", "LRoot.execute", 15),
+            ("right_call", "RRoot.execute", 17),
+            ("instance_call", "Worker", 21),
+        ):
+            self.assertEqual(
+                outbound[caller].endpoint,
+                CallEndpoint("pkg/app.py", caller),
+            )
+            self.assertEqual(
+                inbound[callee].endpoint,
+                CallEndpoint("pkg/app.py", callee),
+            )
+            self.assertEqual(
+                tuple((e.target_symbol, e.line) for e in outbound[caller].edges),
+                ((callee, line),),
+            )
+            self.assertEqual(
+                tuple((e.scope, e.line) for e in inbound[callee].edges),
+                ((caller, line),),
+            )
+
+    def test_same_file_deeper_subclass_owned_calls_enter_call_index(self) -> None:
+        source = (
+            "class Root:\n    pass\n\n"
+            "class Mid(Root):\n    pass\n\n"
+            "class Base(Mid):\n    pass\n\n"
+            "class Worker(Base):\n"
+            "    def execute(self):\n        return True\n\n"
+            "def class_call():\n    return Worker.execute(None)\n\n"
+            "def instance_call():\n"
+            "    worker = Worker()\n    return worker.execute()\n"
+        )
+        index = build_call_index(self.graph(self.evidence("pkg/app.py", source)))
+        outbound = {entry.endpoint: entry for entry in index.outbound}
+        inbound = {entry.endpoint: entry for entry in index.inbound}
+
+        caller = CallEndpoint(path="pkg/app.py", symbol="class_call")
+        instance = CallEndpoint(path="pkg/app.py", symbol="instance_call")
+        member = CallEndpoint(path="pkg/app.py", symbol="Worker.execute")
+        constructor = CallEndpoint(path="pkg/app.py", symbol="Worker")
+
+        self.assertEqual(set(outbound), {caller, instance})
+        self.assertEqual(set(inbound), {member, constructor})
+        self.assertEqual(
+            tuple((e.target_symbol, e.line) for e in outbound[caller].edges),
+            (("Worker.execute", 15),),
+        )
+        self.assertEqual(
+            tuple((e.target_symbol, e.line) for e in outbound[instance].edges),
+            (("Worker", 18), ("Worker.execute", 19)),
+        )
+        self.assertEqual(
+            tuple((e.scope, e.line) for e in inbound[member].edges),
+            (("class_call", 15), ("instance_call", 19)),
+        )
+        self.assertEqual(
+            tuple((e.scope, e.line) for e in inbound[constructor].edges),
+            (("instance_call", 18),),
+        )
+
+    def test_same_file_one_hop_subclass_owned_calls_enter_call_index(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Base:\n"
+                    "    pass\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "def class_call():\n"
+                    "    return Worker.execute(None)\n"
+                    "\n"
+                    "def instance_call():\n"
+                    "    worker = Worker()\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(
+            graph
+        )
+
+        class_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="class_call",
+            )
+        )
+
+        self.assertEqual(
+            tuple(
+                (
+                    edge.target_symbol,
+                    edge.line,
+                )
+                for edge in class_entry.edges
+            ),
+            (
+                (
+                    "Worker.execute",
+                    9,
+                ),
+            ),
+        )
+
+        instance_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="instance_call",
+            )
+        )
+
+        self.assertEqual(
+            tuple(
+                (
+                    edge.target_symbol,
+                    edge.line,
+                )
+                for edge in instance_entry.edges
+            ),
+            (
+                (
+                    "Worker",
+                    12,
+                ),
+                (
+                    "Worker.execute",
+                    13,
+                ),
+            ),
+        )
+
+        member_entry = next(
+            entry
+            for entry in call_index.inbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="Worker.execute",
+            )
+        )
+
+        self.assertEqual(
+            tuple(
+                (
+                    edge.scope,
+                    edge.line,
+                )
+                for edge in member_entry.edges
+            ),
+            (
+                (
+                    "class_call",
+                    9,
+                ),
+                (
+                    "instance_call",
+                    13,
+                ),
+            ),
+        )
+
+
+    def test_same_file_one_hop_inherited_calls_enter_call_index(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "class Base:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    pass\n"
+                    "\n"
+                    "def class_call():\n"
+                    "    return Worker.execute(None)\n"
+                    "\n"
+                    "def instance_call():\n"
+                    "    worker = Worker()\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(
+            graph
+        )
+
+        class_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="class_call",
+            )
+        )
+
+        self.assertEqual(
+            tuple(
+                (
+                    edge.target_symbol,
+                    edge.line,
+                )
+                for edge in class_entry.edges
+            ),
+            (
+                (
+                    "Base.execute",
+                    9,
+                ),
+            ),
+        )
+
+        instance_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="instance_call",
+            )
+        )
+
+        self.assertEqual(
+            tuple(
+                (
+                    edge.target_symbol,
+                    edge.line,
+                )
+                for edge in instance_entry.edges
+            ),
+            (
+                (
+                    "Worker",
+                    12,
+                ),
+                (
+                    "Base.execute",
+                    13,
+                ),
+            ),
+        )
+
+        inherited_entry = next(
+            entry
+            for entry in call_index.inbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="Base.execute",
+            )
+        )
+
+        self.assertEqual(
+            tuple(
+                (
+                    edge.scope,
+                    edge.line,
+                )
+                for edge in inherited_entry.edges
+            ),
+            (
+                (
+                    "class_call",
+                    9,
+                ),
+                (
+                    "instance_call",
+                    13,
+                ),
+            ),
+        )
+
+
+    def test_imported_one_hop_inherited_calls_enter_call_index(
+        self,
+    ) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/base.py",
+                (
+                    "class Base:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                ),
+            ),
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "from .base import Base\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    pass\n"
+                    "\n"
+                    "def class_call():\n"
+                    "    return Worker.execute(None)\n"
+                    "\n"
+                    "def instance_call():\n"
+                    "    worker = Worker()\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(graph)
+
+        class_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="class_call",
+            )
+        )
+
+        self.assertEqual(
+            tuple(
+                (
+                    edge.target_path,
+                    edge.target_symbol,
+                    edge.line,
+                )
+                for edge in class_entry.edges
+            ),
+            (
+                (
+                    "pkg/base.py",
+                    "Base.execute",
+                    7,
+                ),
+            ),
+        )
+
+        instance_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/app.py",
+                symbol="instance_call",
+            )
+        )
+
+        self.assertEqual(
+            tuple(
+                (
+                    edge.target_path,
+                    edge.target_symbol,
+                    edge.line,
+                )
+                for edge in instance_entry.edges
+            ),
+            (
+                (
+                    "pkg/app.py",
+                    "Worker",
+                    10,
+                ),
+                (
+                    "pkg/base.py",
+                    "Base.execute",
+                    11,
+                ),
+            ),
+        )
+
+        inherited_entry = next(
+            entry
+            for entry in call_index.inbound
+            if entry.endpoint
+            == CallEndpoint(
+                path="pkg/base.py",
+                symbol="Base.execute",
+            )
+        )
+
+        self.assertEqual(
+            tuple(
+                (
+                    edge.source_path,
+                    edge.scope,
+                    edge.line,
+                )
+                for edge in inherited_entry.edges
+            ),
+            (
+                (
+                    "pkg/app.py",
+                    "class_call",
+                    7,
+                ),
+                (
+                    "pkg/app.py",
+                    "instance_call",
+                    11,
+                ),
+            ),
+        )
+
+    def test_deeper_imported_inherited_calls_enter_call_index(self) -> None:
+        graph = self.graph(
+            self.evidence(
+                "pkg/root.py",
+                (
+                    "class Root:\n"
+                    "    def execute(self):\n"
+                    "        return True\n"
+                ),
+            ),
+            self.evidence(
+                "pkg/base.py",
+                (
+                    "from .root import Root\n"
+                    "\n"
+                    "class Base(Root):\n"
+                    "    pass\n"
+                ),
+            ),
+            self.evidence(
+                "pkg/app.py",
+                (
+                    "from .base import Base\n"
+                    "\n"
+                    "class Worker(Base):\n"
+                    "    pass\n"
+                    "\n"
+                    "def class_call():\n"
+                    "    return Worker.execute(None)\n"
+                    "\n"
+                    "def instance_call():\n"
+                    "    worker = Worker()\n"
+                    "    return worker.execute()\n"
+                ),
+            ),
+        )
+
+        call_index = build_call_index(graph)
+
+        class_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint == CallEndpoint(path="pkg/app.py", symbol="class_call")
+        )
+        self.assertEqual(
+            tuple(
+                (edge.target_path, edge.target_symbol, edge.line)
+                for edge in class_entry.edges
+            ),
+            (("pkg/root.py", "Root.execute", 7),),
+        )
+
+        instance_entry = next(
+            entry
+            for entry in call_index.outbound
+            if entry.endpoint == CallEndpoint(path="pkg/app.py", symbol="instance_call")
+        )
+        self.assertEqual(
+            tuple(
+                (edge.target_path, edge.target_symbol, edge.line)
+                for edge in instance_entry.edges
+            ),
+            (
+                ("pkg/app.py", "Worker", 10),
+                ("pkg/root.py", "Root.execute", 11),
+            ),
+        )
+
+        inherited_entry = next(
+            entry
+            for entry in call_index.inbound
+            if entry.endpoint == CallEndpoint(path="pkg/root.py", symbol="Root.execute")
+        )
+        self.assertEqual(
+            tuple(
+                (edge.source_path, edge.scope, edge.line)
+                for edge in inherited_entry.edges
+            ),
+            (
+                ("pkg/app.py", "class_call", 7),
+                ("pkg/app.py", "instance_call", 11),
+            ),
+        )
+
+if __name__ == "__main__":
+    unittest.main()

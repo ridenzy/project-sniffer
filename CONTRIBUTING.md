@@ -3,8 +3,9 @@
 Thank you for considering a contribution to Project Sniffer.
 
 Project Sniffer is currently a pre-1.0, local-first repository-intelligence
-tool. The project is being migrated from a small flat Python runtime into an
-installable package while preserving the behaviour that already works.
+tool. The authoritative runtime now lives in the installable `project_sniffer`
+package while the root `main.py` remains as a positional compatibility entry
+point.
 
 ## Core project boundaries
 
@@ -20,26 +21,51 @@ Contributions to the core should preserve these principles:
 
 ## Current runtime
 
-Until the package migration is complete, the current development entry point
-is:
+Project Sniffer now has an installable development package.
+
+The current packaged CLI supports:
 
 ```bash
-python3 main.py /path/to/project
+sniff --project /path/to/project --architecture
+sniff --project /path/to/project --report
+sniff --project /path/to/project --docs
+sniff --project /path/to/project --architecture --report --trace --docs
+sniff --project /path/to/project --trace
 ```
 
-The current flat runtime consists primarily of:
+`--architecture` and `--report` and `--trace` are analyzers. `--docs` is an output
+capability and must remain separate from the stable analyzer set.
+
+Reports are grouped by scanned project:
 
 ```text
-main.py
-scanner.py
-architecture_builder.py
-report_builder.py
-utils.py
-recommended_ignores.json
+reports/<project-name>/<files>
 ```
 
-Do not remove working behaviour from those modules merely because the future
-package layout has already been designed.
+A custom `--output PATH` changes the base output directory but still keeps the
+project-specific subdirectory.
+
+The root-level `main.py` remains available as a positional compatibility entry
+point and delegates to the packaged runtime.
+
+Authoritative scanner, configuration, safe-reading, architecture,
+source-report, and documentation-report behavior belongs under
+`src/project_sniffer/`. Do not recreate parallel root-level implementations
+of packaged runtime modules.
+
+Language recognition and parser support are separate contracts.
+
+`SourceLanguage` and `project_sniffer.evidence.language_registry` describe what
+Project Sniffer can represent and recognize deterministically. They must not be
+used as evidence that a semantic parser exists.
+
+When adding or removing a registered language, suffix, basename, or ambiguity
+rule:
+
+1. update the language registry;
+2. update or add focused classifier tests;
+3. keep `docs/public/language-support.md` synchronized;
+4. do not assign ambiguous suffixes without stronger deterministic evidence.
 
 ## Private and generated material
 
@@ -61,49 +87,83 @@ A safe `.env.example` may be committed when it contains no real values.
 Synthetic fixtures must not contain private project source code, credentials,
 private keys, tokens, cookies, or session material.
 
-## Personal ignore migration
+## Personal ignore configuration
 
-The current private `personal_ignores.json` still uses the legacy shape:
+The current development runtime accepts only the schema-version-1
+per-project `personal_ignores.json` shape.
 
-```json
-{
-    "IGNORE_FOLDERS": [],
-    "IGNORE_FILES": []
-}
-```
+Its local private registry is
+`src/project_sniffer/resources/personal_ignores.json`.
 
-Do not convert the file to the planned multi-project schema until the runtime
-configuration loader has been migrated to understand that schema.
+That file must remain untracked and is intentionally excluded from package
+data. Project Sniffer reads it but does not create or modify it.
 
-Changing the data before changing its consumer would silently alter current
-ignore behaviour.
+The legacy global JSON shape, the repository-root legacy personal-ignore file,
+and the former XDG/APPDATA personal-registry locations are not authoritative
+for the current runtime.
+
+A final installed-user personal-configuration location remains a pre-1.0
+design decision.
 
 ## Baseline validation
 
-For changes touching the current flat runtime, run at minimum:
+For changes touching the root compatibility entry point or packaged runtime,
+run at minimum:
 
 ```bash
-python3 -m compileall \
-    -q \
-    main.py \
-    scanner.py \
-    architecture_builder.py \
-    report_builder.py \
-    utils.py
+python3 -m compileall -q main.py src/project_sniffer tests
 
-python3 -m json.tool \
-    recommended_ignores.json \
-    >/dev/null
+python3 -m json.tool src/project_sniffer/resources/recommended_ignores.json >/dev/null
+
+python3 -m unittest discover -s tests -p 'test_*.py' -v
 
 git diff --check
 ```
 
-Changes that affect scanning or report generation should also be exercised
-against a synthetic disposable project rather than against private production
-repositories.
+Changes that affect scanning, report generation, or documentation reporting
+should also be exercised against a synthetic disposable project before being
+accepted against a real repository.
 
-As the package and formal test suite are introduced, this section will be
-updated with the canonical package, lint, type-check, and test commands.
+The packaged `--architecture`, `--report`, and `--trace` analyzers share the
+canonical full-project `ScanManifest` when those analyzers are selected. New
+analyzers should consume that shared discovery evidence rather than introduce
+parallel full-project discovery walks.
+
+Source-text analyzer consumers must not reopen target-project source files
+directly. Source text must pass through `project_sniffer.reading` so filesystem
+containment, file-symlink handling, binary classification, oversized-file
+classification, non-regular-file refusal, unreadable-file classification, and
+control-character cleaning remain centralized.
+
+`--docs` has a deliberately separate discovery boundary.
+`project_sniffer.docs_reporter` performs scoped scans only for root-level
+`docs/public/` and `docs/private/`. Those scans reuse the shared scanner with
+project-relative Project Sniffer ignore semantics, active output exclusion,
+and target-project `.gitignore` processing disabled.
+
+Documentation files then pass through the same safe-reader,
+`SourceEvidence`, and Markdown report-builder boundaries used elsewhere.
+Do not reintroduce the removed raw-byte documentation-copy path or a parallel
+`docs_exporter` implementation.
+
+If Project Sniffer configuration excludes `docs/private/`, exposing that scope
+must remain an explicit one-run decision. Declining the override must not leave
+a stale canonical private documentation report behind.
+
+Target-project `.gitignore` handling is enabled by default for the canonical
+analyzer scan. The installed CLI may disable that target-project layer for one
+run with `--minus-gitignore`; Project Sniffer recommended and personal ignore
+rules and active output-directory exclusion must remain active.
+
+Target-project `.gitignore` processing must not be silently introduced into
+documentation-scoped scans because `--docs` deliberately operates with that
+layer disabled.
+
+It must not silently be reintroduced into documentation-scoped scans
+without deliberately changing the documented `--docs` contract and its tests.
+
+Keep these baseline commands aligned with the packaged runtime as additional
+analyzers and validation tools are introduced.
 
 ## Commit sign-off
 
