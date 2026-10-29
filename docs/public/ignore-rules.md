@@ -16,7 +16,9 @@ IGNORE_FOLDERS
 IGNORE_FILES
 ```
 
-Patterns without `/` are basename patterns.
+Patterns without `/` are basename patterns. The packaged recommended
+`IGNORE_FOLDERS` rule `private` therefore excludes all folders with that
+basename by default, not only `docs/private/`.
 
 Examples:
 
@@ -139,10 +141,12 @@ Target-project `.gitignore` matching is deliberately disabled for these scoped
 documentation scans. `.gitignore` remains active by default for the canonical
 analyzer scan unless that run explicitly uses `--minus-gitignore`.
 
-If Project Sniffer configuration excludes the `docs/private/` scope itself,
-the CLI requires explicit one-run confirmation before exposing that scope.
-That override applies only to the private scope decision for the current run;
-it does not rewrite ignore configuration.
+When the root-level `docs/private/` scope exists and is excluded (including
+by the default `private` basename rule), `--docs` requires explicit one-run
+confirmation before exposing that scope. The prompt is conditional on that
+scope being present and excluded; it is not unconditional for every `--docs`
+run. Approval overrides only the documentation-scope exclusion for this run;
+it does not rewrite ignore configuration or affect unrelated exclusions.
 
 Declining the override prevents private-report generation and removes an
 existing canonical private report from an earlier approved run.

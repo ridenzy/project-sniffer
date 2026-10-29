@@ -12,7 +12,8 @@
         ".venv",
         "*.egg-info",
         ".turbo",
-        "reports"
+        "reports",
+        "private"
     ],
     "IGNORE_FILES": [
         ".keep",

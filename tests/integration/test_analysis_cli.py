@@ -540,7 +540,10 @@ class ProjectSnifferAnalysisCliTests(
 
         stdout = io.StringIO()
 
-        with redirect_stdout(
+        with patch(
+            "builtins.input",
+            return_value="y",
+        ) as prompt, redirect_stdout(
             stdout
         ):
             status = main(
@@ -560,6 +563,11 @@ class ProjectSnifferAnalysisCliTests(
         self.assertEqual(
             status,
             0,
+        )
+
+        prompt.assert_called_once_with(
+            "Generate the docs/private/ "
+            "report? [y/N]: "
         )
 
         report_directory = (

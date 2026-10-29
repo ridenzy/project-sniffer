@@ -177,9 +177,11 @@ documentation-scoped scans. This is different from the canonical analyzer
 scan. In particular, a Git-ignored `docs/private/` directory can still be
 considered when the user explicitly requests `--docs`.
 
-A Project Sniffer configuration rule that excludes the `docs/private/` scope
-receives additional protection. The CLI warns that private or sensitive
-documentation may be included and asks:
+The packaged recommended `IGNORE_FOLDERS` list includes the basename rule
+`private`, which excludes any directory with that name in ordinary project
+scans, including `docs/private/`. When `--docs` finds an existing, excluded
+`docs/private/` scope, the CLI warns that private or sensitive documentation
+may be included and asks:
 
 ```text
 Generate the docs/private/ report? [y/N]:
