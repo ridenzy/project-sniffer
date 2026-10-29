@@ -37,3 +37,7 @@ personal_ignores.json
 .DS_Store
 .idea/
 .vscode/
+
+#Internal
+CHANGELOG.md
+README-INTERNAL.md
