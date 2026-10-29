@@ -462,6 +462,59 @@ class TraceRendererTests(
         self.assertNotIn("`pkg/app.py::Worker.execute`", rendered)
         self.assertNotIn("`pkg/app.py::ReverseWorker.execute`", rendered)
 
+    def test_renderer_shows_disjoint_linear_two_branch_calls(self) -> None:
+        source = (
+            "class LRoot:\n    def execute(self): return True\n"
+            "class Left(LRoot): pass\n"
+            "class RRoot:\n    def execute(self): return False\n"
+            "class Right(RRoot): pass\n"
+            "class Worker(Left, Right): pass\n"
+            "class ReverseWorker(Right, Left): pass\n"
+            "class Shared:\n    def execute(self): return True\n"
+            "class DL(Shared): pass\nclass DR(Shared): pass\n"
+            "class Diamond(DL, DR): pass\n"
+            "def left_call():\n    return Worker.execute(None)\n"
+            "def right_call():\n    return ReverseWorker.execute(None)\n"
+            "def diamond_call():\n    return Diamond.execute(None)\n"
+            "def instance_call():\n    worker = Worker()\n    return worker.execute()\n"
+        )
+        index = build_semantic_project_index(
+            (self.evidence("pkg/app.py", source),)
+        )
+        rendered = render_dependency_graph(
+            build_dependency_graph(index)
+        )
+
+        required = (
+            "- Resolved internal calls: 3",
+            "- Unresolved calls: 2",
+            "- Confirmed caller endpoints: 3",
+            "- Confirmed callee endpoints: 3",
+            "- [CALL] `pkg/app.py::left_call` → `pkg/app.py::LRoot.execute` (line 15)",
+            "- [CALL] `pkg/app.py::right_call` → `pkg/app.py::RRoot.execute` (line 17)",
+            "- [CALL] `pkg/app.py::instance_call` → `pkg/app.py::Worker` (line 21)",
+            "`pkg/app.py::left_call`\n  - CALLS `pkg/app.py::LRoot.execute` (line 15)",
+            "`pkg/app.py::right_call`\n  - CALLS `pkg/app.py::RRoot.execute` (line 17)",
+            "`pkg/app.py::LRoot.execute`\n  - CALLED BY `pkg/app.py::left_call` (line 15)",
+            "`pkg/app.py::RRoot.execute`\n  - CALLED BY `pkg/app.py::right_call` (line 17)",
+            "- `pkg/app.py`:19 `Diamond.execute` (scope `diamond_call`)",
+            "- `pkg/app.py`:22 `worker.execute` (scope `instance_call`)",
+        )
+
+        for fragment in required:
+            self.assertIn(fragment, rendered)
+
+        self.assertEqual(
+            sum(line.startswith("- [CALL] ") for line in rendered.splitlines()),
+            3,
+        )
+        self.assertNotIn("- [CALL] `pkg/app.py::diamond_call`", rendered)
+        self.assertNotIn(
+            "- [CALL] `pkg/app.py::instance_call` → `pkg/app.py::Worker.execute`",
+            rendered,
+        )
+        self.assertNotIn("`pkg/app.py::ReverseWorker.execute`", rendered)
+
     def test_renderer_shows_same_file_deeper_subclass_owned_calls(self) -> None:
         source = (
             "class Root:\n    pass\n\n"

@@ -604,6 +604,56 @@ class DependencyGraphTests(
         self.assertIsNone(unresolved[0].resolved_target)
         self.assertIsNone(unresolved[0].proof)
 
+    def test_disjoint_linear_two_branch_calls_become_dependency_edges(self) -> None:
+        source = (
+            "class LRoot:\n    def execute(self): return True\n"
+            "class Left(LRoot): pass\n"
+            "class RRoot:\n    def execute(self): return False\n"
+            "class Right(RRoot): pass\n"
+            "class Worker(Left, Right): pass\n"
+            "class ReverseWorker(Right, Left): pass\n"
+            "class Shared:\n    def execute(self): return True\n"
+            "class DL(Shared): pass\nclass DR(Shared): pass\n"
+            "class Diamond(DL, DR): pass\n"
+            "def left_call():\n    return Worker.execute(None)\n"
+            "def right_call():\n    return ReverseWorker.execute(None)\n"
+            "def diamond_call():\n    return Diamond.execute(None)\n"
+            "def instance_call():\n    worker = Worker()\n    return worker.execute()\n"
+        )
+        graph = self.graph(self.evidence("pkg/app.py", source))
+
+        self.assertEqual(len(graph.edges), 3)
+        self.assertEqual(
+            tuple((e.scope, e.line, e.target_symbol, e.resolution.proof) for e in graph.edges),
+            (
+                ("left_call", 15, "LRoot.execute", CallResolutionProof.SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING),
+                ("right_call", 17, "RRoot.execute", CallResolutionProof.SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING),
+                ("instance_call", 21, "Worker", CallResolutionProof.SAME_FILE_STABLE_BINDING),
+            ),
+        )
+
+        self.assertTrue(all(e.kind is DependencyKind.CALL for e in graph.edges))
+        self.assertTrue(all(e.source_path == e.target_path == "pkg/app.py" for e in graph.edges))
+
+        uncertain = {
+            r.evidence.target_parts: r
+            for r in graph.call_resolutions
+            if r.evidence.target_parts in (
+                ("Diamond", "execute"),
+                ("worker", "execute"),
+            )
+        }
+
+        self.assertEqual(
+            set(uncertain),
+            {("Diamond", "execute"), ("worker", "execute")},
+        )
+
+        for result in uncertain.values():
+            self.assertIs(result.status, CallResolutionStatus.UNRESOLVED)
+            self.assertIsNone(result.resolved_target)
+            self.assertIsNone(result.proof)
+
     def test_same_file_deeper_subclass_owned_calls_become_dependency_edges(self) -> None:
         source = (
             "class Root:\n    pass\n\n"

@@ -3429,7 +3429,7 @@ class PythonCallResolutionTests(
                 "deeper_base",
                 "class Root: pass\nclass Left(Root):\n    def execute(self): return True\n"
                 "class Right: pass\nclass Worker(Left, Right): pass\n",
-                None,
+                "Left.execute",
             ),
             (
                 "duplicate_base",
@@ -3479,6 +3479,242 @@ class PythonCallResolutionTests(
                     self.assertEqual(class_result.candidate_targets, (class_result.resolved_target,))
 
                 self.assertIs(instance_result.status, CallResolutionStatus.UNRESOLVED)
+                self.assertIsNone(instance_result.proof)
+                self.assertIsNone(instance_result.resolved_target)
+
+    def test_disjoint_same_file_linear_multiple_inherited_member_boundaries(self) -> None:
+        cases = (
+            (
+                "left_ancestor",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class Left(LRoot): pass\nclass Right: pass\n"
+                "class Worker(Left, Right): pass\n",
+                "LRoot.execute",
+            ),
+            (
+                "right_ancestor",
+                "class Left: pass\nclass RRoot:\n    def execute(self): return True\n"
+                "class Right(RRoot): pass\nclass Worker(Left, Right): pass\n",
+                "RRoot.execute",
+            ),
+            (
+                "both_roots_left_wins",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class Left(LRoot): pass\n"
+                "class RRoot:\n    def execute(self): return False\n"
+                "class Right(RRoot): pass\nclass Worker(Left, Right): pass\n",
+                "LRoot.execute",
+            ),
+            (
+                "both_roots_reverse",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class Left(LRoot): pass\n"
+                "class RRoot:\n    def execute(self): return False\n"
+                "class Right(RRoot): pass\nclass Worker(Right, Left): pass\n",
+                "RRoot.execute",
+            ),
+            (
+                "left_direct_shadows_left_root",
+                "class LRoot:\n    def execute(self): return False\n"
+                "class Left(LRoot):\n    def execute(self): return True\n"
+                "class Right: pass\nclass Worker(Left, Right): pass\n",
+                "Left.execute",
+            ),
+            (
+                "left_root_precedes_right_direct",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class Left(LRoot): pass\n"
+                "class Right:\n    def execute(self): return False\n"
+                "class Worker(Left, Right): pass\n",
+                "LRoot.execute",
+            ),
+            (
+                "right_direct_after_left_empty",
+                "class LRoot: pass\nclass Left(LRoot): pass\n"
+                "class Right:\n    def execute(self): return True\n"
+                "class Worker(Left, Right): pass\n",
+                "Right.execute",
+            ),
+            (
+                "right_direct_shadows_right_root",
+                "class Left: pass\n"
+                "class RRoot:\n    def execute(self): return False\n"
+                "class Right(RRoot):\n    def execute(self): return True\n"
+                "class Worker(Left, Right): pass\n",
+                "Right.execute",
+            ),
+            (
+                "multi_level_disjoint",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class LMid(LRoot): pass\nclass Left(LMid): pass\n"
+                "class RRoot:\n    def execute(self): return False\n"
+                "class RMid(RRoot): pass\nclass Right(RMid): pass\n"
+                "class Worker(Left, Right): pass\n",
+                "LRoot.execute",
+            ),
+            (
+                "shared_root_diamond",
+                "class Root:\n    def execute(self): return True\n"
+                "class Left(Root): pass\nclass Right(Root): pass\n"
+                "class Worker(Left, Right): pass\n",
+                None,
+            ),
+            (
+                "mixed_branch_multiple",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class Extra: pass\n"
+                "class Left(LRoot, Extra): pass\nclass Right: pass\n"
+                "class Worker(Left, Right): pass\n",
+                None,
+            ),
+            (
+                "three_top_bases",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class Left(LRoot): pass\n"
+                "class Right: pass\nclass Extra: pass\n"
+                "class Worker(Left, Right, Extra): pass\n",
+                None,
+            ),
+            (
+                "decorated_root",
+                "class LRoot:\n    @staticmethod\n"
+                "    def execute(): return True\n"
+                "class Left(LRoot): pass\nclass Right: pass\n"
+                "class Worker(Left, Right): pass\n",
+                None,
+            ),
+            (
+                "mutated_root_method",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class Left(LRoot): pass\nclass Right: pass\n"
+                "class Worker(Left, Right): pass\n"
+                "LRoot.execute = replacement\n",
+                None,
+            ),
+            (
+                "mutated_root_bases",
+                "class Root: pass\n"
+                "class LRoot(Root):\n    def execute(self): return True\n"
+                "class Left(LRoot): pass\nclass Right: pass\n"
+                "class Worker(Left, Right): pass\n"
+                "LRoot.__bases__ = (Right,)\n",
+                None,
+            ),
+            (
+                "mutated_mid_bases",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class Left(LRoot): pass\nclass Right: pass\n"
+                "class Worker(Left, Right): pass\n"
+                "Left.__bases__ = (Right,)\n",
+                None,
+            ),
+            (
+                "mutated_right_root",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class Left(LRoot): pass\n"
+                "class RRoot: pass\nclass Right(RRoot): pass\n"
+                "class Worker(Left, Right): pass\n"
+                "RRoot.execute = replacement\n",
+                None,
+            ),
+            (
+                "right_root_ambiguous_binding",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class Left(LRoot): pass\n"
+                "class RRoot:\n    execute = replacement\n"
+                "class Right(RRoot): pass\n"
+                "class Worker(Left, Right): pass\n",
+                None,
+            ),
+            (
+                "right_root_init_subclass",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class Left(LRoot): pass\n"
+                "class RRoot:\n    def __init_subclass__(cls): pass\n"
+                "class Right(RRoot): pass\n"
+                "class Worker(Left, Right): pass\n",
+                None,
+            ),
+            (
+                "rebound_left_root",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class Left(LRoot): pass\nclass Right: pass\n"
+                "class Worker(Left, Right): pass\nLRoot = Right\n",
+                None,
+            ),
+            (
+                "base_expression",
+                "class LRoot:\n    def execute(self): return True\n"
+                "class Left(LRoot): pass\nclass Right: pass\n"
+                "class Worker(Left, make_base()): pass\n",
+                None,
+            ),
+            (
+                "no_method",
+                "class LRoot: pass\nclass Left(LRoot): pass\n"
+                "class RRoot: pass\nclass Right(RRoot): pass\n"
+                "class Worker(Left, Right): pass\n",
+                None,
+            ),
+        )
+
+        for name, prefix, expected_target in cases:
+            with self.subTest(case=name):
+                source = (
+                    prefix
+                    + "\ndef class_call():\n    return Worker.execute(None)\n"
+                    + "\ndef instance_call():\n"
+                    + "    worker = Worker()\n    return worker.execute()\n"
+                )
+
+                resolutions = self.resolve(
+                    self.evidence("pkg/app.py", source)
+                )
+
+                class_result = next(
+                    item for item in resolutions
+                    if item.evidence.target_parts == ("Worker", "execute")
+                )
+
+                instance_result = next(
+                    item for item in resolutions
+                    if item.evidence.target_parts == ("worker", "execute")
+                )
+
+                if expected_target is None:
+                    self.assertIs(
+                        class_result.status,
+                        CallResolutionStatus.UNRESOLVED,
+                    )
+                    self.assertIsNone(class_result.proof)
+                    self.assertIsNone(class_result.resolved_target)
+                else:
+                    self.assertIs(
+                        class_result.status,
+                        CallResolutionStatus.RESOLVED_INTERNAL,
+                    )
+                    self.assertIs(
+                        class_result.proof,
+                        CallResolutionProof.SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING,
+                    )
+                    self.assertIsNotNone(class_result.resolved_target)
+                    self.assertEqual(
+                        class_result.resolved_target.source_path,
+                        "pkg/app.py",
+                    )
+                    self.assertEqual(
+                        class_result.resolved_target.qualified_name,
+                        expected_target,
+                    )
+                    self.assertEqual(
+                        class_result.candidate_targets,
+                        (class_result.resolved_target,),
+                    )
+
+                self.assertIs(
+                    instance_result.status,
+                    CallResolutionStatus.UNRESOLVED,
+                )
                 self.assertIsNone(instance_result.proof)
                 self.assertIsNone(instance_result.resolved_target)
 

@@ -238,9 +238,15 @@ The existing implementation can:
   undecorated method in base order. These class calls reuse
   `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING`; constructor-backed instance
   method calls through this multiple-inheritance shape stay unresolved;
-- reject unsupported multiple-inheritance/C3 MRO shapes (including deeper,
-  diamond, imported-base, and three-base cases), module-expression bases,
-  unstable imported-base bindings, class keywords such
+- extend B4C-A1 with C5J-B4C-A2 for two distinct, disjoint, stable same-file
+  linear base branches, each with only single-base ancestry. Inherited
+  `Class.method(...)` calls select the first stable direct undecorated
+  declaration in the left branch (including its ancestors), then the right
+  branch. This reuses `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` without
+  inferring constructor-backed multiple-inheritance instance-method calls;
+- reject general multiple-inheritance/C3 MRO shapes (including shared-ancestor
+  diamonds, imported multiple bases, and three-base cases), module-expression
+  bases, unstable imported-base bindings, class keywords such
   as metaclasses, decorated or descriptor-backed members, competing bindings,
   receiver/member or inheritance mutation, unsafe `__new__`, `__init__`, or
   `__getattribute__` behavior, receiver rebinding/deletion/aliasing, intervening

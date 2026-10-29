@@ -373,6 +373,19 @@ no full C3 linearization, imported multi-base lookup, or multiple-inheritance
 instance-method proof is introduced. A separately confirmed `Worker()`
 constructor call is not proof of `worker.execute()` for this shape.
 
+C5J-B4C-A2 extends this class-receiver path to two distinct, disjoint,
+stable same-file linear branches. Each direct base may have its own proven
+single-base ancestry; no ancestor may appear in both branches. Lookup checks
+the entire left branch before the right branch, using the existing stable
+binding and direct-member guards. For `class Worker(Left, Right)`, a
+confirmed `Worker.execute(...)` call resolves to the first stable direct
+undecorated declaring method in that bounded order. Reversing the direct
+bases reverses branch precedence. The path still reuses
+`SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` and does not establish
+arbitrary C3 MRO, shared-ancestor diamonds, imported multiple bases,
+three-base classes, or constructor-backed multiple-inheritance
+instance-method dispatch.
+
 Call resolution still distinguishes potential internal, unresolved, ambiguous,
 shadowed, resolved-internal, and dynamic outcomes. Arbitrary instance receivers
 such as `service.execute()` and attribute chains outside the narrow proven
@@ -464,14 +477,14 @@ The passive-gap proof accepts only `pass`, constant expression statements, and
 plain assignments to non-receiver names whose values are composed only of
 constants, non-receiver loaded names, tuples, or lists of those values.
 
-C5J-B1/B3B/B4A and the bounded C5J-B4C-A1 path reuse the existing three
-inheritance-specific proof kinds.
+C5J-B1/B3B/B4A and the bounded C5J-B4C-A1/A2 paths reuse the existing
+three inheritance-specific proof kinds.
 
 `SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING` confirms supported inherited
 `Worker.execute(...)` calls with proven same-file base bindings. Its target is
 the actual stable declaring method, not a synthetic `Worker.execute`: either
-the first declaration on a confirmed linear ancestry or the first qualifying
-declaration under B4C-A1's shallow two-root-base ordering.
+the first declaration on a confirmed linear ancestry, B4C-A1's shallow
+two-root-base order, or B4C-A2's two disjoint same-file linear branches.
 
 `INTERNAL_IMPORTED_INHERITED_CLASS_ATTRIBUTE_BINDING` provides the
 corresponding class-receiver proof when the receiver class's direct base is
@@ -506,11 +519,11 @@ not a guarantee that the call executes at runtime.
 not satisfy positive proof remain potential, shadowed, ambiguous, unresolved,
 or dynamic evidence as appropriate.
 
-General multiple inheritance/C3 MRO (including deeper or diamond shapes,
-imported bases, and three-base classes), module-expression or other dynamically
-expressed bases, unsupported class keywords, descriptors/decorated inherited
-members, and unstable imported-base bindings remain unconfirmed outside the
-bounded B4C-A1 class-receiver path.
+General multiple inheritance/C3 MRO (including shared-ancestor diamonds,
+imported multiple bases, and three-base classes), module-expression or other
+dynamically expressed bases, unsupported class keywords, descriptors/decorated
+inherited members, and unstable imported-base bindings remain unconfirmed
+outside the bounded B4C-A1/A2 class-receiver paths.
 
 C5J-B4B broadens subclass-owned direct-member proof only across
 stable same-file linear ancestry; imported-base subclass-owned cases remain

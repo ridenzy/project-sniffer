@@ -224,6 +224,16 @@ The project is still in pre-1.0 development.
   metaclasses, mutation, decorated methods, and other unsupported multiple-
   inheritance shapes remain unconfirmed. Added precedence/refusal, dependency
   graph, call index, renderer, and installed-CLI trace acceptance coverage.
+- C5J-B4C-A2 extends the B4C-A1 class-receiver path to exactly two disjoint
+  stable same-file linear base branches. Each branch may have deeper single-base
+  ancestry, and its stable direct member declarations are checked in branch
+  order before the other branch. The resolver reuses the existing linear
+  ancestry, member-binding and inherited-call proof machinery.
+- Shared-ancestor diamonds, imported multiple bases, three-base classes,
+  decorators, unstable bindings, recognized mutations, and constructor-backed
+  multiple-inheritance instance-method calls stay unconfirmed. Added 22
+  resolver boundary scenarios, three downstream graph/index/renderer tests,
+  and installed `sniff --trace` acceptance for the bounded shape.
 
 ### Changed
 

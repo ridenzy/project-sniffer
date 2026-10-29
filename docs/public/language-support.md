@@ -76,18 +76,24 @@ undecorated declaration wins in declared base order, and the result retains
 Constructor-backed multiple-inheritance instance-method calls remain unresolved;
 this is not a general C3 MRO implementation.
 
+C5J-B4C-A2 extends the same class-receiver proof to exactly two disjoint,
+stable same-file linear branches, checking each direct base and its single-base
+ancestors in declared branch order. It uses the existing linear-ancestry and
+stable-member checks, retains the same proof kind, and does not introduce
+general C3 MRO or constructor-backed multiple-inheritance instance dispatch.
+
 Explicit module/class attribute calls affected by caller or target mutation,
 decorated or rebound methods, unsupported inheritance shapes, class keywords
 such as metaclasses, ambiguity, or other insufficient static evidence remain
 separate from confirmed `CALL` relationships. The general inherited-member
 proof supports stable linear ancestry: every hop uses one plain-name base
 proven as a stable same-file or directly imported internal class. B4C-A1 adds
-only the two-same-file-root-base class-call exception. Deeper/diamond,
-imported-base, three-base, and general C3 MRO inheritance, module-expression
+the shallow two-root-base class-call exception; B4C-A2 also supports two
+disjoint same-file linear branches. Shared-ancestor diamonds, imported
+multiple bases, three-base inheritance, general C3 MRO, module-expression
 bases, unstable imports, descriptors, and other unsupported shapes remain
-unconfirmed. The B4B subclass-owned
-direct-member path supports deeper same-file ancestry only; imported-base
-subclass-owned paths remain unconfirmed.
+unconfirmed. The B4B subclass-owned direct-member path supports deeper
+same-file ancestry only; imported-base subclass-owned paths remain unconfirmed.
 
 Local instance calls also remain unconfirmed when the
 narrow constructor proof does not apply, including factory results, constructor
@@ -250,7 +256,8 @@ through stable direct-name bindings, the conservative C5I module/class attribute
 proofs, the C5J constructor-backed local-instance proof family, the
 C5J-B1/B3B/B4A inherited-member paths across supported same-file or imported
 linear ancestry, the C5J-B4B subclass-owned path for entirely same-file
-linear ancestry, or the B4C-A1 shallow two-root-base inherited class-call path.
+linear ancestry, the B4C-A1 shallow two-root-base inherited class-call path,
+or the B4C-A2 disjoint same-file linear two-branch class-call path.
 
 Broader instance propagation, factory return-type inference, general
 multiple-inheritance/C3 MRO resolution, `super()` semantics, decorated/descriptor method

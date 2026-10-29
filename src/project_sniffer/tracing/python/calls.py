@@ -2080,7 +2080,7 @@ def _confirmed_same_file_subclass_member_target(
 
     return ancestry, confirmed_member
 
-def _confirmed_shallow_same_file_multiple_inherited_member_target(
+def _confirmed_disjoint_same_file_linear_multiple_inherited_member_target(
     *,
     tree: ast.Module,
     class_target: CallTarget,
@@ -2088,7 +2088,7 @@ def _confirmed_shallow_same_file_multiple_inherited_member_target(
     top_level_symbols: dict[tuple[str, str], tuple[CallTarget, ...]],
     qualified_symbols: dict[tuple[str, str], tuple[CallTarget, ...]],
 ) -> tuple[tuple[CallTarget, ...], CallTarget, CallResolutionProof] | None:
-    """Confirm a two-root-base MRO prefix without widening linear ancestry."""
+    """Prove two disjoint same-file linear MRO branches, not general C3."""
     class_node = _find_direct_class_definition(tree=tree, target=class_target)
     if class_node is None or class_node.keywords or len(class_node.bases) != 2:
         return None
@@ -2100,59 +2100,95 @@ def _confirmed_shallow_same_file_multiple_inherited_member_target(
     if len(set(base_names)) != 2:
         return None
 
-    bases = []
-    winner = None
+    branches = []
+    seen = {(class_target.source_path, class_target.qualified_name)}
 
     for base_name in base_names:
         base_target = _confirmed_same_file_direct_base_target(
-            tree=tree,
-            class_target=class_target,
-            top_level_symbols=top_level_symbols,
-            base_name=base_name,
+            tree=tree, class_target=class_target, top_level_symbols=top_level_symbols,
+            allow_deeper=True, base_name=base_name,
         )
         if base_target is None:
             return None
 
         base_node = _find_direct_class_definition(tree=tree, target=base_target)
-        if base_node is None or base_node.bases:
+        if base_node is None:
             return None
 
-        if _named_receiver_attribute_mutation_exists(
-            tree=tree, receiver_name=base_name, member_name=member_name,
-        ):
-            return None
-
-        members = _ordered_unique_targets(qualified_symbols.get(
-            (base_target.source_path, f"{base_target.qualified_name}.{member_name}"), (),
-        ))
-        if len(members) > 1:
-            return None
-
-        if members:
-            member_target = _confirmed_direct_class_member_definition_target(
-                tree=tree, class_target=base_target, member_target=members[0],
+        if base_node.bases:
+            result = _confirmed_linear_class_ancestry(
+                tree=tree, class_target=base_target,
+                top_level_symbols=top_level_symbols,
+                import_resolutions=(), symbol_tables={},
+                syntax_trees={class_target.source_path: tree},
             )
-            if member_target is None:
+            if result is None or result[1] is not CallResolutionProof.SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING:
                 return None
-            if winner is None:
-                winner = member_target
-        elif (
-            _class_binding_sites(tree=tree, class_node=base_node, name=member_name)
-            or _named_receiver_attribute_mutation_exists(
-                tree=tree, receiver_name=base_target.qualified_name, member_name=member_name,
-            )
-        ):
-            return None
+            ancestry = result[0]
+        else:
+            ancestry = (base_target,)
 
-        bases.append(base_target)
+        for ancestor in ancestry:
+            identity = (ancestor.source_path, ancestor.qualified_name)
+            if identity in seen:
+                return None
+            seen.add(identity)
+
+        branches.append((base_name, ancestry))
+
+    winner = None
+
+    for first_base_name, ancestry in branches:
+        binding_name = first_base_name
+
+        for position, ancestor_target in enumerate(ancestry):
+            ancestor_node = _find_direct_class_definition(tree=tree, target=ancestor_target)
+            if ancestor_node is None:
+                return None
+
+            if _named_receiver_attribute_mutation_exists(
+                tree=tree, receiver_name=binding_name, member_name=member_name,
+            ):
+                return None
+
+            members = _ordered_unique_targets(qualified_symbols.get(
+                (ancestor_target.source_path, f"{ancestor_target.qualified_name}.{member_name}"), (),
+            ))
+
+            if len(members) > 1:
+                return None
+
+            if members:
+                member_target = _confirmed_direct_class_member_definition_target(
+                    tree=tree, class_target=ancestor_target, member_target=members[0],
+                )
+                if member_target is None:
+                    return None
+                if winner is None:
+                    winner = member_target
+
+            elif (
+                _class_binding_sites(tree=tree, class_node=ancestor_node, name=member_name)
+                or _named_receiver_attribute_mutation_exists(
+                    tree=tree, receiver_name=ancestor_target.qualified_name, member_name=member_name,
+                )
+            ):
+                return None
+
+            if position + 1 < len(ancestry):
+                binding_name = direct_plain_base_name(ancestor_node)
+                if binding_name is None:
+                    return None
 
     if winner is None:
         return None
 
+    flattened = tuple(target for _, ancestry in branches for target in ancestry)
     return (
-        (class_target, *bases), winner,
+        (class_target, *flattened), winner,
         CallResolutionProof.SAME_FILE_INHERITED_CLASS_ATTRIBUTE_BINDING,
     )
+
 
 
 def _confirmed_direct_inherited_member_target(
@@ -2201,7 +2237,7 @@ def _confirmed_direct_inherited_member_target(
     )
 
     if ancestry_result is None:
-        return _confirmed_shallow_same_file_multiple_inherited_member_target(
+        return _confirmed_disjoint_same_file_linear_multiple_inherited_member_target(
             tree=tree,
             class_target=class_target,
             member_name=member_name,

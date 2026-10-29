@@ -575,6 +575,60 @@ class CallIndexTests(
                 ((caller, line),),
             )
 
+    def test_disjoint_linear_two_branch_calls_enter_call_index(self) -> None:
+        source = (
+            "class LRoot:\n    def execute(self): return True\n"
+            "class Left(LRoot): pass\n"
+            "class RRoot:\n    def execute(self): return False\n"
+            "class Right(RRoot): pass\n"
+            "class Worker(Left, Right): pass\n"
+            "class ReverseWorker(Right, Left): pass\n"
+            "class Shared:\n    def execute(self): return True\n"
+            "class DL(Shared): pass\nclass DR(Shared): pass\n"
+            "class Diamond(DL, DR): pass\n"
+            "def left_call():\n    return Worker.execute(None)\n"
+            "def right_call():\n    return ReverseWorker.execute(None)\n"
+            "def diamond_call():\n    return Diamond.execute(None)\n"
+            "def instance_call():\n    worker = Worker()\n    return worker.execute()\n"
+        )
+        index = build_call_index(
+            self.graph(self.evidence("pkg/app.py", source))
+        )
+
+        outbound = {item.endpoint.symbol: item for item in index.outbound}
+        inbound = {item.endpoint.symbol: item for item in index.inbound}
+
+        self.assertEqual(
+            set(outbound),
+            {"left_call", "right_call", "instance_call"},
+        )
+        self.assertEqual(
+            set(inbound),
+            {"LRoot.execute", "RRoot.execute", "Worker"},
+        )
+
+        for caller, callee, line in (
+            ("left_call", "LRoot.execute", 15),
+            ("right_call", "RRoot.execute", 17),
+            ("instance_call", "Worker", 21),
+        ):
+            self.assertEqual(
+                outbound[caller].endpoint,
+                CallEndpoint("pkg/app.py", caller),
+            )
+            self.assertEqual(
+                inbound[callee].endpoint,
+                CallEndpoint("pkg/app.py", callee),
+            )
+            self.assertEqual(
+                tuple((e.target_symbol, e.line) for e in outbound[caller].edges),
+                ((callee, line),),
+            )
+            self.assertEqual(
+                tuple((e.scope, e.line) for e in inbound[callee].edges),
+                ((caller, line),),
+            )
+
     def test_same_file_deeper_subclass_owned_calls_enter_call_index(self) -> None:
         source = (
             "class Root:\n    pass\n\n"
